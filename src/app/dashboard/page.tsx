@@ -139,6 +139,7 @@ interface CostDashboardSummaryResponse {
 export default function DashboardPage() {
   const { user, supabase, credits, refreshCredits } = useSupabase()
   const router = useRouter()
+  const [hasAdminAccess, setHasAdminAccess] = useState(false)
   const [data, setData] = useState<DashboardData | null>(null)
   const [workerMetrics, setWorkerMetrics] = useState<WorkerDashboardMetrics | null>(null)
   const [showWorkerPanel, setShowWorkerPanel] = useState(false)
@@ -360,6 +361,7 @@ export default function DashboardPage() {
       if (!userResult.ok || !userResult.payload) {
           const fallbackData = await buildFallbackDashboardData()
           setData(fallbackData)
+          setHasAdminAccess(false)
           setLoadError('Some dashboard services are unavailable. Showing fallback data.')
           setShowWorkerPanel(false)
           setShowReconcilePanel(false)
@@ -373,6 +375,12 @@ export default function DashboardPage() {
       setData(userResult.payload)
       setLoading(false)
 
+      const adminSessionResult = await fetchJsonWithTimeout<{ isAdmin: boolean }>(
+        '/api/internal/admin/session',
+        2500
+      )
+      setHasAdminAccess(Boolean(adminSessionResult.ok && adminSessionResult.payload?.isAdmin))
+
       // Admin/ops panels moved to /admin.
       setShowWorkerPanel(false)
       setShowReconcilePanel(false)
@@ -384,6 +392,7 @@ export default function DashboardPage() {
       console.error('Error loading dashboard')
       const fallbackData = await buildFallbackDashboardData()
       setData(fallbackData)
+      setHasAdminAccess(false)
       setLoadError('Some dashboard services are unavailable. Showing fallback data.')
       setShowWorkerPanel(false)
       setShowReconcilePanel(false)
@@ -734,12 +743,14 @@ export default function DashboardPage() {
                 Billing
               </Link>
 
-              <Link
-                href="/admin"
-                className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-orange-300 hover:text-orange-200"
-              >
-                Admin
-              </Link>
+              {hasAdminAccess && (
+                <Link
+                  href="/admin"
+                  className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-orange-300 hover:text-orange-200"
+                >
+                  Admin Panel
+                </Link>
+              )}
               
               <button
                 onClick={handleLogout}
