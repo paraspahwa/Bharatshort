@@ -373,45 +373,13 @@ export default function DashboardPage() {
       setData(userResult.payload)
       setLoading(false)
 
-      // Optional panels should not block base dashboard rendering.
-      const [metricsResult, reconcileRunsResult, adminUsersResult, costSummaryResult] = await Promise.all([
-        fetchJsonWithTimeout<WorkerDashboardMetrics>('/api/internal/jobs/dashboard-metrics', 2500),
-        fetchJsonWithTimeout<{ runs: ReconcileRun[] }>('/api/internal/payments/dashboard-reconcile', 2500),
-        fetchJsonWithTimeout<{ admins: DashboardAdminUser[] }>('/api/internal/admin/dashboard-users', 2500),
-        fetchJsonWithTimeout<CostDashboardSummaryResponse>('/api/internal/costs/dashboard-summary?limit=14', 2500),
-      ])
-
-      if (metricsResult.ok && metricsResult.payload) {
-        setWorkerMetrics(metricsResult.payload)
-        setShowWorkerPanel(true)
-      } else {
-        setShowWorkerPanel(false)
-      }
-
-      if (reconcileRunsResult.ok && reconcileRunsResult.payload) {
-        const runs = reconcileRunsResult.payload.runs
-        setReconcileRuns(Array.isArray(runs) ? runs : [])
-        setShowReconcilePanel(true)
-      } else {
-        setShowReconcilePanel(false)
-      }
-
-      if (adminUsersResult.ok && adminUsersResult.payload) {
-        const admins = adminUsersResult.payload.admins
-        setAdminUsers(Array.isArray(admins) ? admins : [])
-        setShowAdminPanel(true)
-        await fetchAdminAuditEvents(1, adminAuditActionFilter, adminAuditSearchQuery)
-      } else {
-        setShowAdminPanel(false)
-      }
-
-      if (costSummaryResult.ok && costSummaryResult.payload) {
-        setCostSummary(costSummaryResult.payload)
-        setShowCostPanel(true)
-      } else {
-        setShowCostPanel(false)
-        setCostSummary(null)
-      }
+      // Admin/ops panels moved to /admin.
+      setShowWorkerPanel(false)
+      setShowReconcilePanel(false)
+      setShowAdminPanel(false)
+      setShowCostPanel(false)
+      setCostSummary(null)
+      setAdminAuditEvents([])
     } catch (error) {
       console.error('Error loading dashboard')
       const fallbackData = await buildFallbackDashboardData()
@@ -764,6 +732,13 @@ export default function DashboardPage() {
                 className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-teal-300 hover:text-teal-200"
               >
                 Billing
+              </Link>
+
+              <Link
+                href="/admin"
+                className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-orange-300 hover:text-orange-200"
+              >
+                Admin
               </Link>
               
               <button
