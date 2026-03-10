@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useSupabase } from '../providers'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { Video, Plus, CreditCard, Clock, TrendingUp, LogOut, Activity, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Video, Plus, CreditCard, Clock, TrendingUp, LogOut, Activity, AlertTriangle, RefreshCw, Shield, UserPlus, UserX } from 'lucide-react'
 
 interface Project {
   id: string
@@ -75,6 +75,38 @@ interface ReconcileResponse {
   mismatches: ReconcileMismatch[]
 }
 
+interface DashboardAdminUser {
+  user_id: string
+  email: string | null
+  is_active: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface AdminAuditEvent {
+  id: string
+  action: 'grant' | 'revoke' | string
+  actor_type: string
+  actor_user_id: string | null
+  actor_email: string | null
+  target_user_id: string
+  target_email: string | null
+  notes: string | null
+  source: string
+  metadata: Record<string, any> | null
+  created_at: string
+}
+
+interface AdminAuditResponse {
+  logs: AdminAuditEvent[]
+  limit: number
+  page: number
+  action: 'grant' | 'revoke' | null
+  query: string | null
+  hasMore: boolean
+}
+
 export default function DashboardPage() {
   const { user, supabase, credits, refreshCredits } = useSupabase()
   const router = useRouter()
@@ -92,6 +124,19 @@ export default function DashboardPage() {
   const [reconcileLimit, setReconcileLimit] = useState(100)
   const [reconcileLoading, setReconcileLoading] = useState(false)
   const [reconcileAction, setReconcileAction] = useState<'dry-run' | 'repair' | null>(null)
+  const [showAdminPanel, setShowAdminPanel] = useState(false)
+  const [adminUsers, setAdminUsers] = useState<DashboardAdminUser[]>([])
+  const [adminAuditEvents, setAdminAuditEvents] = useState<AdminAuditEvent[]>([])
+  const [adminAuditActionFilter, setAdminAuditActionFilter] = useState<'all' | 'grant' | 'revoke'>('all')
+  const [adminAuditSearchInput, setAdminAuditSearchInput] = useState('')
+  const [adminAuditSearchQuery, setAdminAuditSearchQuery] = useState('')
+  const [adminAuditPage, setAdminAuditPage] = useState(1)
+  const [adminAuditHasMore, setAdminAuditHasMore] = useState(false)
+  const [adminAuditLoading, setAdminAuditLoading] = useState(false)
+  const [adminEmailInput, setAdminEmailInput] = useState('')
+  const [adminNotesInput, setAdminNotesInput] = useState('')
+  const [adminLoading, setAdminLoading] = useState(false)
+  const [adminActionUserId, setAdminActionUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -103,12 +148,39 @@ export default function DashboardPage() {
     loadDashboardData()
   }, [user])
 
+  useEffect(() => {
+    if (!showAdminPanel) {
+      return
+    }
+
+    void fetchAdminAuditEvents(1, adminAuditActionFilter, adminAuditSearchQuery)
+  }, [adminAuditActionFilter, showAdminPanel])
+
+  useEffect(() => {
+    if (!showAdminPanel) {
+      return
+    }
+
+    const normalized = adminAuditSearchInput.trim().toLowerCase()
+    if (normalized === adminAuditSearchQuery) {
+      return
+    }
+
+    const timeout = setTimeout(() => {
+      setAdminAuditSearchQuery(normalized)
+      void fetchAdminAuditEvents(1, adminAuditActionFilter, normalized, true)
+    }, 350)
+
+    return () => clearTimeout(timeout)
+  }, [adminAuditSearchInput, adminAuditSearchQuery, adminAuditActionFilter, showAdminPanel])
+
   const loadDashboardData = async () => {
     try {
-      const [userRes, metricsRes, reconcileRunsRes] = await Promise.all([
+      const [userRes, metricsRes, reconcileRunsRes, adminUsersRes] = await Promise.all([
         fetch('/api/user'),
         fetch('/api/internal/jobs/dashboard-metrics'),
         fetch('/api/internal/payments/dashboard-reconcile'),
+        fetch('/api/internal/admin/dashboard-users'),
       ])
 
       if (userRes.ok) {
@@ -131,12 +203,136 @@ export default function DashboardPage() {
       } else {
         setShowReconcilePanel(false)
       }
+
+      if (adminUsersRes.ok) {
+        const adminPayload = await adminUsersRes.json()
+        setAdminUsers(Array.isArray(adminPayload?.admins) ? adminPayload.admins : [])
+        setShowAdminPanel(true)
+        await fetchAdminAuditEvents(1, adminAuditActionFilter, adminAuditSearchQuery)
+      } else {
+        setShowAdminPanel(false)
+      }
     } catch (error) {
       console.error('Error loading dashboard:', error)
       setShowWorkerPanel(false)
       setShowReconcilePanel(false)
+      setShowAdminPanel(false)
+      setAdminAuditEvents([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAdminAuditEvents = async (
+    page: number,
+    action: 'all' | 'grant' | 'revoke' = adminAuditActionFilter,
+    searchQuery: string = adminAuditSearchQuery,
+    suppressErrorToast: boolean = false
+  ) => {
+    try {
+      setAdminAuditLoading(true)
+      const actionQuery = action === 'all' ? '' : `&action=${action}`
+      const queryParam = searchQuery.trim().length > 0
+        ? `&query=${encodeURIComponent(searchQuery.trim())}`
+        : ''
+      const response = await fetch(`/api/internal/admin/dashboard-audit?limit=12&page=${page}${actionQuery}${queryParam}`)
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch admin audit events')
+      }
+
+      const payload = (await response.json()) as AdminAuditResponse
+      setAdminAuditEvents(Array.isArray(payload?.logs) ? payload.logs : [])
+      setAdminAuditPage(payload?.page || page)
+      setAdminAuditHasMore(Boolean(payload?.hasMore))
+    } catch (error: any) {
+      setAdminAuditEvents([])
+      setAdminAuditHasMore(false)
+      if (!suppressErrorToast) {
+        toast.error(error?.message || 'Failed to fetch admin audit events')
+      }
+    } finally {
+      setAdminAuditLoading(false)
+    }
+  }
+
+  const resetAdminAuditView = async () => {
+    setAdminAuditSearchInput('')
+    setAdminAuditSearchQuery('')
+    setAdminAuditActionFilter('all')
+    await fetchAdminAuditEvents(1, 'all', '')
+  }
+
+  const refreshAdminUsers = async () => {
+    const response = await fetch('/api/internal/admin/dashboard-users')
+    if (!response.ok) {
+      throw new Error('Failed to refresh admin users')
+    }
+
+    const payload = await response.json()
+    setAdminUsers(Array.isArray(payload?.admins) ? payload.admins : [])
+    await fetchAdminAuditEvents(1, adminAuditActionFilter, adminAuditSearchQuery)
+  }
+
+  const grantDashboardAdmin = async () => {
+    try {
+      if (!adminEmailInput.trim()) {
+        toast.error('Please enter an email address')
+        return
+      }
+
+      setAdminLoading(true)
+      const response = await fetch('/api/internal/admin/dashboard-users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: adminEmailInput.trim().toLowerCase(),
+          notes: adminNotesInput.trim(),
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to grant admin access')
+      }
+
+      toast.success('Admin access granted')
+      setAdminEmailInput('')
+      setAdminNotesInput('')
+      await refreshAdminUsers()
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to grant admin access')
+    } finally {
+      setAdminLoading(false)
+    }
+  }
+
+  const revokeDashboardAdmin = async (userId: string, email: string | null) => {
+    try {
+      setAdminActionUserId(userId)
+      const response = await fetch('/api/internal/admin/dashboard-users', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to revoke admin access')
+      }
+
+      toast.success(`Revoked admin access for ${email || userId}`)
+      await refreshAdminUsers()
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to revoke admin access')
+    } finally {
+      setAdminActionUserId(null)
     }
   }
 
@@ -571,6 +767,202 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showAdminPanel && (
+          <div className="glass-card mb-8 rounded-xl p-6">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="flex items-center gap-2 font-[var(--font-display)] text-xl font-bold text-white">
+                  <Shield className="h-5 w-5 text-orange-300" />
+                  Dashboard Admin Access
+                </h2>
+                <p className="mt-1 text-sm text-slate-300">Manage active admin users for dashboard ops panels.</p>
+              </div>
+              <button
+                type="button"
+                onClick={refreshAdminUsers}
+                disabled={adminLoading || Boolean(adminActionUserId)}
+                className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-orange-300 hover:text-orange-200 disabled:opacity-60"
+              >
+                Refresh
+              </button>
+            </div>
+
+            <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+              <input
+                type="email"
+                value={adminEmailInput}
+                onChange={(event) => setAdminEmailInput(event.target.value)}
+                placeholder="admin@example.com"
+                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-orange-300/60 placeholder:text-slate-400 focus:ring"
+              />
+              <input
+                type="text"
+                value={adminNotesInput}
+                onChange={(event) => setAdminNotesInput(event.target.value)}
+                placeholder="Notes (optional)"
+                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-orange-300/60 placeholder:text-slate-400 focus:ring"
+              />
+              <button
+                type="button"
+                onClick={grantDashboardAdmin}
+                disabled={adminLoading || Boolean(adminActionUserId)}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-300/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:opacity-60"
+              >
+                <UserPlus className="h-4 w-4" />
+                {adminLoading ? 'Adding...' : 'Grant Admin'}
+              </button>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-white">Active and Historical Admin Entries</h3>
+              {adminUsers.length === 0 ? (
+                <p className="text-sm text-slate-300">No admin entries found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {adminUsers.map((admin) => (
+                    <div key={admin.user_id} className="flex flex-col gap-2 rounded-md border border-white/10 bg-white/5 p-3 text-sm text-slate-200 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <div className="font-semibold text-white">{admin.email || admin.user_id}</div>
+                        <div className="mt-1 text-xs text-slate-300">User ID: {admin.user_id}</div>
+                        <div className="mt-1 text-xs text-slate-300">Status: {admin.is_active ? 'Active' : 'Inactive'} | Updated: {new Date(admin.updated_at).toLocaleString()}</div>
+                        {admin.notes && <div className="mt-1 text-xs text-slate-400">Notes: {admin.notes}</div>}
+                      </div>
+
+                      <div>
+                        {admin.is_active ? (
+                          <button
+                            type="button"
+                            onClick={() => revokeDashboardAdmin(admin.user_id, admin.email)}
+                            disabled={adminLoading || adminActionUserId === admin.user_id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-60"
+                          >
+                            <UserX className="h-3.5 w-3.5" />
+                            {adminActionUserId === admin.user_id ? 'Revoking...' : 'Revoke'}
+                          </button>
+                        ) : (
+                          <span className="rounded bg-slate-700/60 px-2 py-1 text-xs text-slate-300">Inactive</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-4">
+              <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <h3 className="text-sm font-semibold text-white">Recent Admin Audit Events</h3>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={adminAuditSearchInput}
+                    onChange={(event) => setAdminAuditSearchInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        const normalized = adminAuditSearchInput.trim().toLowerCase()
+                        setAdminAuditSearchQuery(normalized)
+                        void fetchAdminAuditEvents(1, adminAuditActionFilter, normalized)
+                      }
+                    }}
+                    placeholder="Search actor/target email"
+                    className="rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-xs text-white outline-none placeholder:text-slate-400"
+                  />
+                  <select
+                    value={adminAuditActionFilter}
+                    onChange={(event) => {
+                      const value = event.target.value as 'all' | 'grant' | 'revoke'
+                      setAdminAuditActionFilter(value)
+                    }}
+                    className="rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-xs text-white outline-none"
+                  >
+                    <option value="all">All Actions</option>
+                    <option value="grant">Grant Only</option>
+                    <option value="revoke">Revoke Only</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const normalized = adminAuditSearchInput.trim().toLowerCase()
+                      setAdminAuditSearchQuery(normalized)
+                      void fetchAdminAuditEvents(1, adminAuditActionFilter, normalized)
+                    }}
+                    disabled={adminAuditLoading}
+                    className="rounded-lg border border-white/20 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:border-orange-300 hover:text-orange-200 disabled:opacity-60"
+                  >
+                    {adminAuditLoading ? 'Loading...' : 'Apply'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void resetAdminAuditView()}
+                    disabled={adminAuditLoading}
+                    className="rounded-lg border border-white/20 px-2.5 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-slate-300 hover:text-white disabled:opacity-60"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <p className="mb-3 text-xs text-slate-400">
+                Showing {adminAuditEvents.length} result{adminAuditEvents.length === 1 ? '' : 's'}
+                {' '}on page {adminAuditPage}
+                {' '}for {adminAuditActionFilter === 'all' ? 'all actions' : `${adminAuditActionFilter} actions`}
+                {adminAuditSearchQuery ? ` matching "${adminAuditSearchQuery}"` : ''}.
+              </p>
+
+              {adminAuditEvents.length === 0 ? (
+                <p className="text-sm text-slate-300">
+                  {adminAuditSearchQuery || adminAuditActionFilter !== 'all'
+                    ? `No results for ${adminAuditSearchQuery ? `"${adminAuditSearchQuery}"` : 'the current query'} in ${adminAuditActionFilter === 'all' ? 'all actions' : `${adminAuditActionFilter} actions`}.`
+                    : 'No admin audit events yet.'}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {adminAuditEvents.slice(0, 12).map((event) => (
+                    <div key={event.id} className="rounded-md border border-white/10 bg-white/5 p-3 text-xs text-slate-200">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`rounded px-2 py-0.5 font-semibold ${
+                          event.action === 'grant' ? 'bg-emerald-500/20 text-emerald-200' : 'bg-rose-500/20 text-rose-200'
+                        }`}>
+                          {event.action.toUpperCase()}
+                        </span>
+                        <span className="text-slate-400">{new Date(event.created_at).toLocaleString()}</span>
+                      </div>
+                      <div className="mt-2 text-slate-300">
+                        Actor: {event.actor_email || event.actor_user_id || 'unknown'} | Target: {event.target_email || event.target_user_id}
+                      </div>
+                      <div className="mt-1 text-slate-400">
+                        Source: {event.source} | Type: {event.actor_type}
+                      </div>
+                      {event.notes && <div className="mt-1 text-slate-400">Notes: {event.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/10 pt-3">
+                <button
+                  type="button"
+                  onClick={() => fetchAdminAuditEvents(Math.max(1, adminAuditPage - 1), adminAuditActionFilter, adminAuditSearchQuery)}
+                  disabled={adminAuditLoading || adminAuditPage <= 1}
+                  className="rounded-lg border border-white/20 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:border-orange-300 hover:text-orange-200 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-slate-400">Page {adminAuditPage}</span>
+                <button
+                  type="button"
+                  onClick={() => fetchAdminAuditEvents(adminAuditPage + 1, adminAuditActionFilter, adminAuditSearchQuery)}
+                  disabled={adminAuditLoading || !adminAuditHasMore}
+                  className="rounded-lg border border-white/20 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:border-orange-300 hover:text-orange-200 disabled:opacity-50"
+                >
+                  Next
+                </button>
               </div>
             </div>
           </div>

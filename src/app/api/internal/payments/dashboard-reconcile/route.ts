@@ -29,7 +29,7 @@ async function authorizeAdmin(): Promise<{ ok: true; email: string } | { ok: fal
   }
 
   const email = (session.user.email || '').toLowerCase()
-  const isAdmin = await isDashboardAdmin(session.user.id, email)
+  const isAdmin = await isDashboardAdmin(session.user.id)
 
   if (!isAdmin) {
     return {

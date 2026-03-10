@@ -231,6 +231,43 @@ export interface Database {
           notes?: string | null
         }
       }
+      admin_audit_logs: {
+        Row: {
+          id: string
+          action: string
+          actor_type: string
+          actor_user_id: string | null
+          actor_email: string | null
+          target_user_id: string
+          target_email: string | null
+          notes: string | null
+          source: string
+          metadata: Record<string, any> | null
+          created_at: string
+        }
+        Insert: {
+          action: string
+          actor_type: string
+          actor_user_id?: string | null
+          actor_email?: string | null
+          target_user_id: string
+          target_email?: string | null
+          notes?: string | null
+          source: string
+          metadata?: Record<string, any> | null
+        }
+        Update: {
+          action?: string
+          actor_type?: string
+          actor_user_id?: string | null
+          actor_email?: string | null
+          target_user_id?: string
+          target_email?: string | null
+          notes?: string | null
+          source?: string
+          metadata?: Record<string, any> | null
+        }
+      }
       generation_jobs: {
         Row: {
           id: string

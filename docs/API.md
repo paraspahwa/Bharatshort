@@ -228,8 +228,7 @@ Admin-only dashboard endpoint to fetch recent reconciliation runs.
 
 **Authentication:**
 - Supabase session cookie
-- Preferred: user has active row in `public.admin_users`
-- Fallback compatibility: user email listed in `ADMIN_EMAILS`
+- User must have an active row in `public.admin_users`
 
 **Response:**
 ```json
@@ -282,6 +281,8 @@ Admin-only dashboard endpoint to run reconciliation from UI.
 
 - Apply migration [supabase/migrations/012_admin_users.sql](supabase/migrations/012_admin_users.sql)
   to enable DB-backed dashboard admin roles.
+- Apply migration [supabase/migrations/013_admin_audit_logs.sql](supabase/migrations/013_admin_audit_logs.sql)
+  to enable immutable admin grant/revoke audit tracking.
 - Bootstrap an admin by inserting their user id into `public.admin_users`:
 
 ```sql
@@ -289,6 +290,12 @@ insert into public.admin_users (user_id, is_active, notes)
 values ('<auth-user-uuid>', true, 'initial ops admin')
 on conflict (user_id) do update set is_active = excluded.is_active;
 ```
+
+Admin grant/revoke actions now write audit entries to `public.admin_audit_logs` with:
+- action (`grant` or `revoke`)
+- actor identity (user id/email for dashboard admins, optional actor email for internal ops)
+- target identity
+- source endpoint metadata
 
 ---
 
@@ -418,7 +425,7 @@ Server-side proxy endpoint intended for in-app dashboard visibility.
 **Access rules:**
 - `WORKER_SECRET` must be configured
 - User must be authenticated
-- User email must be included in `ADMIN_EMAILS` (comma-separated)
+- User must have an active row in `public.admin_users`
 
 **Response:**
 ```json
@@ -429,6 +436,174 @@ Server-side proxy endpoint intended for in-app dashboard visibility.
   "processing": 2,
   "stuckProcessing": 1,
   "deadLetter": 3
+}
+```
+
+---
+
+### GET /api/internal/admin/users
+
+Internal admin management endpoint to list dashboard admins.
+
+**Authorization:**
+- `x-worker-secret` header matching `WORKER_SECRET` (strictly required)
+
+**Query Parameters:**
+- `activeOnly` (optional): `true` to list only active admins
+
+**Response:**
+```json
+{
+  "admins": [
+    {
+      "user_id": "uuid",
+      "email": "admin@example.com",
+      "is_active": true,
+      "notes": "initial ops admin",
+      "created_at": "2026-03-10T20:31:10.123Z",
+      "updated_at": "2026-03-10T20:31:10.123Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+### POST /api/internal/admin/users
+
+Grants or re-activates dashboard admin access.
+
+**Authorization:**
+- `x-worker-secret` header matching `WORKER_SECRET` (strictly required)
+
+**Request Body:**
+```json
+{
+  "email": "admin@example.com",
+  "notes": "ops on-call"
+}
+```
+
+You may pass `userId` instead of `email`.
+
+### DELETE /api/internal/admin/users
+
+Revokes dashboard admin access by setting `is_active=false`.
+
+**Authorization:**
+- `x-worker-secret` header matching `WORKER_SECRET` (strictly required)
+
+**Request Body:**
+```json
+{
+  "email": "admin@example.com"
+}
+```
+
+You may pass `userId` instead of `email`.
+
+---
+
+### GET /api/internal/admin/dashboard-users
+
+Dashboard-safe proxy endpoint for admin management UI.
+
+**Authentication:**
+- Supabase session cookie
+- Request user must be active admin in `public.admin_users`
+
+**Response:**
+```json
+{
+  "admins": [
+    {
+      "user_id": "uuid",
+      "email": "admin@example.com",
+      "is_active": true,
+      "notes": "ops on-call",
+      "created_at": "2026-03-10T20:31:10.123Z",
+      "updated_at": "2026-03-10T20:31:10.123Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+### POST /api/internal/admin/dashboard-users
+
+Grants or re-activates dashboard admin access from the dashboard UI.
+
+**Authentication:**
+- Supabase session cookie
+- Request user must be active admin in `public.admin_users`
+
+**Request Body:**
+```json
+{
+  "email": "admin@example.com",
+  "notes": "ops on-call"
+}
+```
+
+You may pass `userId` instead of `email`.
+
+### DELETE /api/internal/admin/dashboard-users
+
+Revokes dashboard admin access (`is_active=false`) from the dashboard UI.
+
+**Authentication:**
+- Supabase session cookie
+- Request user must be active admin in `public.admin_users`
+
+**Request Body:**
+```json
+{
+  "userId": "uuid"
+}
+```
+
+Safety rule: endpoint prevents revoking the last active admin account.
+
+---
+
+### GET /api/internal/admin/dashboard-audit
+
+Dashboard-safe read-only endpoint for recent admin grant/revoke audit events.
+
+**Authentication:**
+- Supabase session cookie
+- Request user must be active admin in `public.admin_users`
+
+**Query Parameters:**
+- `limit` (optional): 1-100, default 25
+- `page` (optional): 1-based page number, default 1
+- `action` (optional): `grant` or `revoke`
+- `query` (optional): case-insensitive text search across actor and target email
+
+**Response:**
+```json
+{
+  "logs": [
+    {
+      "id": "uuid",
+      "action": "grant",
+      "actor_type": "dashboard_admin",
+      "actor_user_id": "uuid",
+      "actor_email": "admin@example.com",
+      "target_user_id": "uuid",
+      "target_email": "target@example.com",
+      "notes": "ops on-call",
+      "source": "dashboard_proxy",
+      "metadata": {
+        "endpoint": "/api/internal/admin/dashboard-users"
+      },
+      "created_at": "2026-03-10T20:31:10.123Z"
+    }
+  ],
+  "limit": 25,
+  "page": 1,
+  "action": null,
+  "query": null,
+  "hasMore": false
 }
 ```
 

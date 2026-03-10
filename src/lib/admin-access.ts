@@ -1,16 +1,6 @@
 import { getSupabaseAdmin } from './supabase'
 
-function getAdminEmailsFromEnv(): Set<string> {
-  const raw = process.env.ADMIN_EMAILS || ''
-  return new Set(
-    raw
-      .split(',')
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean)
-  )
-}
-
-export async function isDashboardAdmin(userId: string, email?: string | null): Promise<boolean> {
+export async function isDashboardAdmin(userId: string): Promise<boolean> {
   try {
     const { data, error } = await (getSupabaseAdmin() as any)
       .from('admin_users')
@@ -19,30 +9,12 @@ export async function isDashboardAdmin(userId: string, email?: string | null): P
       .eq('is_active', true)
       .maybeSingle()
 
-    if (!error && data?.user_id) {
-      return true
-    }
-
-    const code = String((error as any)?.code || '')
-    const relationMissing = code === '42P01'
-    if (error && !relationMissing) {
+    if (error) {
       throw error
     }
 
-    const normalizedEmail = (email || '').toLowerCase()
-    if (!normalizedEmail) {
-      return false
-    }
-
-    const adminEmails = getAdminEmailsFromEnv()
-    return adminEmails.size > 0 && adminEmails.has(normalizedEmail)
+    return Boolean(data?.user_id)
   } catch {
-    const normalizedEmail = (email || '').toLowerCase()
-    if (!normalizedEmail) {
-      return false
-    }
-
-    const adminEmails = getAdminEmailsFromEnv()
-    return adminEmails.size > 0 && adminEmails.has(normalizedEmail)
+    return false
   }
 }

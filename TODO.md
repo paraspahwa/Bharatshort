@@ -34,6 +34,7 @@ Run the pending SQL migrations in order on every environment (staging, then prod
 - supabase/migrations/010_payment_capture_atomic.sql
 - supabase/migrations/011_payment_reconciliation.sql
 - supabase/migrations/012_admin_users.sql
+- supabase/migrations/013_admin_audit_logs.sql
 
 Also ensure these already-applied reliability migrations exist in your target DB:
 
@@ -48,6 +49,7 @@ Verification checks after migration:
 - reconcile_paid_payment_orders RPC exists.
 - refund_generation_job_charges RPC exists.
 - admin_users table exists.
+- admin_audit_logs table exists.
 
 ## 2. Configure Environment Variables
 
@@ -90,12 +92,9 @@ Set these in local .env.local and in deployment provider (Vercel/host):
 
 ### Admin access
 
-- ADMIN_EMAILS=comma-separated-admin-emails
-
-Preferred model now:
-
 - Add admin users in DB table `public.admin_users`.
-- Keep `ADMIN_EMAILS` only as temporary fallback compatibility.
+- Ensure required dashboard admins have `is_active=true`.
+- Manage admin access through internal API `/api/internal/admin/users` with `x-worker-secret`.
 
 ### Razorpay payments
 
@@ -136,7 +135,7 @@ Verify in deployment platform that both cron jobs are active and invoking succes
 
 - Ensure WORKER_SECRET is long and unique per environment.
 - Ensure internal endpoints are not publicly documented outside trusted ops.
-- Keep ADMIN_EMAILS minimal (least privilege).
+- Keep `public.admin_users` minimal (least privilege).
 - Rotate Razorpay and worker secrets if previously shared.
 
 ## 6. Post-Deploy Validation (Staging then Production)
@@ -165,11 +164,22 @@ Verify in deployment platform that both cron jobs are active and invoking succes
 3. If mismatches exist, run Repair Reconciliation.
 4. Confirm repaired count and new credit transaction linkage.
 
+### Admin management flow
+
+1. Open dashboard as active admin.
+2. In "Dashboard Admin Access", grant admin access to a test user.
+3. Confirm user appears in admin list as active.
+4. Revoke test user and confirm status becomes inactive.
+5. Confirm grant/revoke entries appear in dashboard admin audit timeline.
+6. Validate action filter (`all/grant/revoke`) and page navigation in audit timeline.
+7. Validate email search in audit timeline (actor/target email query).
+
 ## 7. Monitoring and Alerting
 
 - Check /api/internal/jobs/health with worker auth header.
 - Check /api/internal/jobs/metrics for queue health trends.
 - Check /api/internal/payments/reconcile/run logs daily.
+- Audit dashboard admin list via `/api/internal/admin/users?activeOnly=true`.
 - If PAYMENT_RECON_ALERT_WEBHOOK_URL is set, verify alerts arrive when mismatches > 0.
 
 ## 8. Rollback Plan
@@ -190,7 +200,6 @@ If worker instability occurs:
 
 ## 9. Optional Next Improvements
 
-- Add role-based admin table (instead of ADMIN_EMAILS env list).
 - Add reconciliation export (CSV) and pagination.
 - Add Slack/Discord formatted alert adapters.
 - Add automated integration tests for payment verify + webhook idempotency.
@@ -203,8 +212,15 @@ If worker instability occurs:
 - [x] Health endpoint validates queue-mode config (warn only for optional alert webhook).
 - [ ] Migrations 009/010/011/012 applied in staging.
 - [ ] Migrations 009/010/011/012 applied in production.
+- [ ] Migration 013 applied in staging and production.
 - [ ] All required env vars configured.
 - [ ] DB admin users bootstrapped in public.admin_users.
+- [ ] Internal admin management API validated (list, grant, revoke).
+- [ ] In-app dashboard admin panel validated (grant/revoke cycle).
+- [ ] Admin audit logs verified for grant/revoke actions.
+- [ ] In-app admin audit timeline validated.
+- [ ] Audit timeline filter and pagination validated.
+- [ ] Audit timeline email search validated.
 - [ ] Razorpay webhook configured and tested.
 - [ ] Worker cron confirmed.
 - [ ] Reconciliation cron confirmed.
