@@ -166,26 +166,48 @@ export default function AdminPage() {
       setLoadError(null)
       setLoading(true)
 
-      const [metricsResult, reconcileRunsResult, adminUsersResult, costSummaryResult] = await Promise.all([
-        fetchJsonWithTimeout<WorkerDashboardMetrics>('/api/internal/jobs/dashboard-metrics', 3000),
-        fetchJsonWithTimeout<{ runs: ReconcileRun[] }>('/api/internal/payments/dashboard-reconcile', 3000),
-        fetchJsonWithTimeout<{ admins: DashboardAdminUser[] }>('/api/internal/admin/dashboard-users', 3000),
-        fetchJsonWithTimeout<CostDashboardSummaryResponse>('/api/internal/costs/dashboard-summary?limit=14', 3000),
-      ])
+      const adminUsersResult = await fetchJsonWithTimeout<{ admins: DashboardAdminUser[] }>(
+        '/api/internal/admin/dashboard-users',
+        5000
+      )
 
-      if (!metricsResult.ok || !reconcileRunsResult.ok || !adminUsersResult.ok || !costSummaryResult.ok) {
+      // Guard decision should depend only on admin membership check.
+      if (!adminUsersResult.ok || !adminUsersResult.payload) {
         setLoadError('Admin access unavailable. Ensure your account is an active dashboard admin.')
-        if (!guardReady) {
-          router.replace('/dashboard')
-        }
+        router.replace('/dashboard')
         return
       }
 
-      setWorkerMetrics(metricsResult.payload || null)
-      setReconcileRuns(Array.isArray(reconcileRunsResult.payload?.runs) ? reconcileRunsResult.payload?.runs : [])
       setAdminUsers(Array.isArray(adminUsersResult.payload?.admins) ? adminUsersResult.payload?.admins : [])
-      setCostSummary(costSummaryResult.payload || null)
       setGuardReady(true)
+
+      const [metricsResult, reconcileRunsResult, costSummaryResult] = await Promise.all([
+        fetchJsonWithTimeout<WorkerDashboardMetrics>('/api/internal/jobs/dashboard-metrics', 4000),
+        fetchJsonWithTimeout<{ runs: ReconcileRun[] }>('/api/internal/payments/dashboard-reconcile', 4000),
+        fetchJsonWithTimeout<CostDashboardSummaryResponse>('/api/internal/costs/dashboard-summary?limit=14', 4000),
+      ])
+
+      if (metricsResult.ok && metricsResult.payload) {
+        setWorkerMetrics(metricsResult.payload)
+      } else {
+        setWorkerMetrics(null)
+      }
+
+      if (reconcileRunsResult.ok && reconcileRunsResult.payload) {
+        setReconcileRuns(Array.isArray(reconcileRunsResult.payload.runs) ? reconcileRunsResult.payload.runs : [])
+      } else {
+        setReconcileRuns([])
+      }
+
+      if (costSummaryResult.ok && costSummaryResult.payload) {
+        setCostSummary(costSummaryResult.payload)
+      } else {
+        setCostSummary(null)
+      }
+
+      if (!metricsResult.ok || !reconcileRunsResult.ok || !costSummaryResult.ok) {
+        setLoadError('Some admin services are temporarily unavailable. Showing partial data.')
+      }
 
       await fetchAdminAuditEvents(1, adminAuditActionFilter, adminAuditSearchQuery, true)
     } catch {
@@ -458,6 +480,12 @@ export default function AdminPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {loadError && (
+          <div className="mb-6 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            {loadError}
+          </div>
+        )}
+
         <div className="glass-card mb-8 rounded-xl p-6">
           <div className="mb-5 flex items-center justify-between">
             <h2 className="flex items-center gap-2 font-[var(--font-display)] text-xl font-bold text-white">
