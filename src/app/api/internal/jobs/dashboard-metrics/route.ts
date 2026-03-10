@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { isDashboardAdmin } from '@/lib/admin-access'
+import { resolveRequestAuth } from '@/lib/request-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,18 +19,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: async () => cookieStore })
+    const auth = await resolveRequestAuth(request)
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session) {
+    if (!auth?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const isAdmin = await isDashboardAdmin(session.user.id)
+    const isAdmin = await isDashboardAdmin(auth.user.id)
 
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

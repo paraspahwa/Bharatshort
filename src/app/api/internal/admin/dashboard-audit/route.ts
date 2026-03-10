@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { isDashboardAdmin } from '@/lib/admin-access'
+import { resolveRequestAuth } from '@/lib/request-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +9,7 @@ interface AuthorizedSession {
   userId: string
 }
 
-async function authorizeAdminSession(): Promise<{ ok: true; session: AuthorizedSession } | { ok: false; response: NextResponse }> {
+async function authorizeAdminSession(request: NextRequest): Promise<{ ok: true; session: AuthorizedSession } | { ok: false; response: NextResponse }> {
   if (!process.env.WORKER_SECRET) {
     return {
       ok: false,
@@ -18,21 +17,15 @@ async function authorizeAdminSession(): Promise<{ ok: true; session: AuthorizedS
     }
   }
 
-  const cookieStore = await cookies()
-  const supabase = createRouteHandlerClient({ cookies: async () => cookieStore })
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  if (!session) {
+  const auth = await resolveRequestAuth(request)
+  if (!auth?.user) {
     return {
       ok: false,
       response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
     }
   }
 
-  const isAdmin = await isDashboardAdmin(session.user.id)
+  const isAdmin = await isDashboardAdmin(auth.user.id)
   if (!isAdmin) {
     return {
       ok: false,
@@ -43,14 +36,14 @@ async function authorizeAdminSession(): Promise<{ ok: true; session: AuthorizedS
   return {
     ok: true,
     session: {
-      userId: session.user.id,
+        userId: auth.user.id,
     },
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await authorizeAdminSession()
+    const auth = await authorizeAdminSession(request)
     if (!auth.ok) {
       return auth.response
     }
