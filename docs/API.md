@@ -228,7 +228,8 @@ Admin-only dashboard endpoint to fetch recent reconciliation runs.
 
 **Authentication:**
 - Supabase session cookie
-- User email must be listed in `ADMIN_EMAILS`
+- Preferred: user has active row in `public.admin_users`
+- Fallback compatibility: user email listed in `ADMIN_EMAILS`
 
 **Response:**
 ```json
@@ -275,6 +276,18 @@ Admin-only dashboard endpoint to run reconciliation from UI.
     }
   ]
 }
+```
+
+### Admin Access Model
+
+- Apply migration [supabase/migrations/012_admin_users.sql](supabase/migrations/012_admin_users.sql)
+  to enable DB-backed dashboard admin roles.
+- Bootstrap an admin by inserting their user id into `public.admin_users`:
+
+```sql
+insert into public.admin_users (user_id, is_active, notes)
+values ('<auth-user-uuid>', true, 'initial ops admin')
+on conflict (user_id) do update set is_active = excluded.is_active;
 ```
 
 ---

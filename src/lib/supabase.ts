@@ -213,6 +213,24 @@ export interface Database {
           metadata?: Record<string, any> | null
         }
       }
+      admin_users: {
+        Row: {
+          user_id: string
+          is_active: boolean
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          is_active?: boolean
+          notes?: string | null
+        }
+        Update: {
+          is_active?: boolean
+          notes?: string | null
+        }
+      }
       generation_jobs: {
         Row: {
           id: string

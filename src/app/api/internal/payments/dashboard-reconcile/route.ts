@@ -2,18 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { isDashboardAdmin } from '@/lib/admin-access'
 
 export const dynamic = 'force-dynamic'
-
-function getAdminEmails(): Set<string> {
-  const raw = process.env.ADMIN_EMAILS || ''
-  return new Set(
-    raw
-      .split(',')
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean)
-  )
-}
 
 async function authorizeAdmin(): Promise<{ ok: true; email: string } | { ok: false; response: NextResponse }> {
   if (!process.env.WORKER_SECRET) {
@@ -37,9 +28,8 @@ async function authorizeAdmin(): Promise<{ ok: true; email: string } | { ok: fal
     }
   }
 
-  const adminEmails = getAdminEmails()
   const email = (session.user.email || '').toLowerCase()
-  const isAdmin = adminEmails.size > 0 && adminEmails.has(email)
+  const isAdmin = await isDashboardAdmin(session.user.id, email)
 
   if (!isAdmin) {
     return {

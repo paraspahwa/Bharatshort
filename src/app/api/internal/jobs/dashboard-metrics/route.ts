@@ -2,18 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { isDashboardAdmin } from '@/lib/admin-access'
 
 export const dynamic = 'force-dynamic'
-
-function getAdminEmails(): Set<string> {
-  const raw = process.env.ADMIN_EMAILS || ''
-  return new Set(
-    raw
-      .split(',')
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean)
-  )
-}
 
 async function getCount(queryBuilder: any): Promise<number> {
   const { count, error } = await queryBuilder
@@ -40,8 +31,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const adminEmails = getAdminEmails()
-    const isAdmin = adminEmails.size > 0 && adminEmails.has((session.user.email || '').toLowerCase())
+    const isAdmin = await isDashboardAdmin(session.user.id, session.user.email)
 
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

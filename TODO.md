@@ -33,6 +33,7 @@ Run the pending SQL migrations in order on every environment (staging, then prod
 - supabase/migrations/009_payment_orders.sql
 - supabase/migrations/010_payment_capture_atomic.sql
 - supabase/migrations/011_payment_reconciliation.sql
+- supabase/migrations/012_admin_users.sql
 
 Also ensure these already-applied reliability migrations exist in your target DB:
 
@@ -46,6 +47,7 @@ Verification checks after migration:
 - capture_payment_order RPC exists.
 - reconcile_paid_payment_orders RPC exists.
 - refund_generation_job_charges RPC exists.
+- admin_users table exists.
 
 ## 2. Configure Environment Variables
 
@@ -89,6 +91,11 @@ Set these in local .env.local and in deployment provider (Vercel/host):
 ### Admin access
 
 - ADMIN_EMAILS=comma-separated-admin-emails
+
+Preferred model now:
+
+- Add admin users in DB table `public.admin_users`.
+- Keep `ADMIN_EMAILS` only as temporary fallback compatibility.
 
 ### Razorpay payments
 
@@ -194,9 +201,10 @@ If worker instability occurs:
 - [x] Local compile check passes (`npm run type-check`).
 - [x] Local env keys added for worker/payment/reconciliation flow.
 - [x] Health endpoint validates queue-mode config (warn only for optional alert webhook).
-- [ ] Migrations 009/010/011 applied in staging.
-- [ ] Migrations 009/010/011 applied in production.
+- [ ] Migrations 009/010/011/012 applied in staging.
+- [ ] Migrations 009/010/011/012 applied in production.
 - [ ] All required env vars configured.
+- [ ] DB admin users bootstrapped in public.admin_users.
 - [ ] Razorpay webhook configured and tested.
 - [ ] Worker cron confirmed.
 - [ ] Reconciliation cron confirmed.
