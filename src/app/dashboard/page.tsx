@@ -206,6 +206,47 @@ export default function DashboardPage() {
     }
   }
 
+  const buildFallbackDashboardData = async (): Promise<DashboardData> => {
+    let recentProjects: Project[] = []
+
+    if (supabase && user) {
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('id, title, status, thumbnail_url, created_at, credits_used')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      recentProjects = Array.isArray(projects)
+        ? projects.map((project: any) => ({
+          id: project.id,
+          title: project.title || 'Untitled project',
+          status: project.status || 'draft',
+          thumbnail_url: project.thumbnail_url || null,
+          created_at: project.created_at,
+          credits_used: Number(project.credits_used || 0),
+        }))
+        : []
+    }
+
+    const currentBalance = typeof credits === 'number' ? credits : 0
+    const completedVideos = recentProjects.filter((project) => project.status === 'completed').length
+
+    return {
+      user: {
+        id: user?.id || null,
+        email: user?.email || null,
+      },
+      creditSummary: {
+        currentBalance,
+        totalSpent: 0,
+        totalAdded: 0,
+        videoCount: completedVideos,
+      },
+      recentProjects,
+    }
+  }
+
   const costTrend = useMemo(() => {
     if (!costSummary || !Array.isArray(costSummary.rows) || costSummary.rows.length < 2) {
       return null
@@ -317,8 +358,9 @@ export default function DashboardPage() {
       // Core user payload should load first so dashboard is usable quickly.
       const userResult = await fetchJsonWithTimeout<DashboardData>('/api/user', 5000)
       if (!userResult.ok || !userResult.payload) {
-          setData(null)
-          setLoadError('Could not load dashboard data. Please retry.')
+          const fallbackData = await buildFallbackDashboardData()
+          setData(fallbackData)
+          setLoadError('Some dashboard services are unavailable. Showing fallback data.')
           setShowWorkerPanel(false)
           setShowReconcilePanel(false)
           setShowAdminPanel(false)
@@ -372,7 +414,9 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error('Error loading dashboard')
-      setLoadError('Could not load dashboard. Please retry.')
+      const fallbackData = await buildFallbackDashboardData()
+      setData(fallbackData)
+      setLoadError('Some dashboard services are unavailable. Showing fallback data.')
       setShowWorkerPanel(false)
       setShowReconcilePanel(false)
       setShowAdminPanel(false)
@@ -735,6 +779,12 @@ export default function DashboardPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {loadError && (
+          <div className="mb-6 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            {loadError}
+          </div>
+        )}
+
         {/* Stats Grid */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <div className="glass-card rounded-xl p-6">
