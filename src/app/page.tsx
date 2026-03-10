@@ -1,63 +1,80 @@
 import Link from 'next/link'
-import { Video, Sparkles, Zap } from 'lucide-react'
+import { Video, Sparkles, Zap, ArrowRight, PlayCircle } from 'lucide-react'
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+    <div className="min-h-screen animated-grid">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#05070f]/70 backdrop-blur-xl">
+        <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
-            <Video className="w-8 h-8 text-orange-600" />
-            <span className="text-2xl font-bold text-gray-900">BharatShort AI</span>
+            <Video className="h-8 w-8 text-orange-400" />
+            <span className="font-[var(--font-display)] text-2xl font-bold text-white">BharatShort AI</span>
           </div>
           <nav className="flex gap-4">
-            <Link href="/login" className="px-4 py-2 text-gray-700 hover:text-orange-600 transition">
+            <Link href="/login" className="rounded-lg px-4 py-2 text-slate-300 transition hover:text-white">
               Login
             </Link>
-            <Link href="/signup" className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition">
+            <Link href="/signup" className="glow-ring rounded-xl bg-orange-500 px-5 py-2.5 font-semibold text-white transition hover:bg-orange-400">
               Get Started
             </Link>
           </nav>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="container mx-auto px-4 py-20 text-center">
-        <div className="max-w-4xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-800 rounded-full mb-6">
-            <Sparkles className="w-4 h-4" />
-            <span className="text-sm font-medium">AI-Powered Video Creation</span>
+      <section className="container mx-auto px-4 py-20 md:py-24">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-2">
+          <div className="animate-rise-in">
+            <div className="aurora-chip mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm text-slate-100">
+              <Sparkles className="h-4 w-4 text-orange-300" />
+              AI-Powered Video Creation
+            </div>
+
+            <h1 className="font-[var(--font-display)] text-5xl font-bold leading-tight text-white md:text-6xl">
+              From Idea to Viral Reel in Minutes.
+            </h1>
+
+            <p className="mt-6 max-w-xl text-lg text-slate-300">
+              Craft cinematic short-form videos with scripted storytelling, AI visuals, natural voiceovers, and auto captions.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-4">
+              <Link href="/signup" className="animate-pulse-glow inline-flex items-center gap-2 rounded-xl bg-orange-500 px-7 py-4 text-lg font-semibold text-white transition hover:bg-orange-400">
+                Start Creating
+                <ArrowRight className="h-5 w-5" />
+              </Link>
+              <Link href="#features" className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-7 py-4 text-lg font-semibold text-slate-100 transition hover:border-teal-300 hover:text-teal-200">
+                <PlayCircle className="h-5 w-5" />
+                Explore Features
+              </Link>
+            </div>
           </div>
-          
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-            Create Stunning Short Videos
-            <span className="text-orange-600"> with AI</span>
-          </h1>
-          
-          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Generate professional YouTube Shorts, Instagram Reels, and TikTok videos automatically. 
-            Just provide a topic, and let AI do the rest.
-          </p>
-          
-          <div className="flex gap-4 justify-center">
-            <Link href="/signup" className="px-8 py-4 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition text-lg font-semibold flex items-center gap-2">
-              <Zap className="w-5 h-5" />
-              Start Creating Free
-            </Link>
-            <Link href="#features" className="px-8 py-4 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-orange-600 hover:text-orange-600 transition text-lg font-semibold">
-              Learn More
-            </Link>
+
+          <div className="glass-card animate-rise-in rounded-3xl p-6 [animation-delay:120ms]">
+            <div className="mb-4 flex items-center justify-between">
+              <span className="text-sm text-slate-300">Live Pipeline Preview</span>
+              <span className="rounded-full bg-teal-500/20 px-3 py-1 text-xs text-teal-200">Queue Active</span>
+            </div>
+            <div className="space-y-4">
+              {['Script generated', 'Scene visuals rendered', 'Voice narration ready', 'Final composition exporting'].map((step, idx) => (
+                <div key={step} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="mb-2 flex items-center justify-between text-sm text-slate-200">
+                    <span>{step}</span>
+                    <span>{Math.min(100, 25 * (idx + 1))}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                    <div className="h-full rounded-full bg-gradient-to-r from-orange-400 to-teal-400" style={{ width: `${Math.min(100, 25 * (idx + 1))}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
       <section id="features" className="container mx-auto px-4 py-20">
-        <h2 className="text-4xl font-bold text-center text-gray-900 mb-12">
-          Everything You Need in One Platform
+        <h2 className="mb-12 text-center font-[var(--font-display)] text-4xl font-bold text-white">
+          Everything You Need in One Engine
         </h2>
-        
         <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {[
             {
@@ -91,22 +108,20 @@ export default function HomePage() {
               icon: '💳',
             },
           ].map((feature, index) => (
-            <div key={index} className="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition">
+            <div key={index} className="glass-card rounded-2xl p-6 transition duration-300 hover:-translate-y-1">
               <div className="text-4xl mb-4">{feature.icon}</div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">{feature.title}</h3>
-              <p className="text-gray-600">{feature.description}</p>
+              <h3 className="mb-2 text-xl font-bold text-white">{feature.title}</h3>
+              <p className="text-slate-300">{feature.description}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="bg-white py-20">
+      <section className="py-20">
         <div className="container mx-auto px-4">
-          <h2 className="text-4xl font-bold text-center text-gray-900 mb-12">
+          <h2 className="mb-12 text-center font-[var(--font-display)] text-4xl font-bold text-white">
             How It Works
           </h2>
-          
           <div className="max-w-4xl mx-auto space-y-8">
             {[
               { step: '1', title: 'Enter Your Topic', description: 'Tell us what video you want to create' },
@@ -114,13 +129,13 @@ export default function HomePage() {
               { step: '3', title: 'Review & Customize', description: 'Preview your video and make any adjustments' },
               { step: '4', title: 'Download & Share', description: 'Export your video and publish to social media' },
             ].map((item) => (
-              <div key={item.step} className="flex gap-4 items-start">
-                <div className="flex-shrink-0 w-12 h-12 bg-orange-600 text-white rounded-full flex items-center justify-center text-xl font-bold">
+              <div key={item.step} className="glass-card flex items-start gap-4 rounded-2xl p-5">
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-orange-500 text-xl font-bold text-white">
                   {item.step}
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-1">{item.title}</h3>
-                  <p className="text-gray-600">{item.description}</p>
+                  <h3 className="mb-1 text-xl font-bold text-white">{item.title}</h3>
+                  <p className="text-slate-300">{item.description}</p>
                 </div>
               </div>
             ))}
@@ -128,22 +143,20 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA Section */}
       <section className="container mx-auto px-4 py-20 text-center">
-        <div className="max-w-3xl mx-auto bg-gradient-to-r from-orange-600 to-purple-600 rounded-2xl p-12 text-white">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-white/20 bg-gradient-to-r from-orange-500/90 to-teal-500/90 p-12 text-white shadow-2xl">
           <h2 className="text-4xl font-bold mb-4">Ready to Create Amazing Videos?</h2>
-          <p className="text-xl mb-8 opacity-90">
+          <p className="mb-8 text-xl opacity-90">
             Join thousands of content creators already using BharatShort AI
           </p>
-          <Link href="/signup" className="inline-block px-8 py-4 bg-white text-orange-600 rounded-lg hover:bg-gray-100 transition text-lg font-semibold">
+          <Link href="/signup" className="inline-block rounded-xl bg-white px-8 py-4 text-lg font-semibold text-slate-900 transition hover:bg-slate-200">
             Get Started Now - Free Credits
           </Link>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t bg-gray-50 py-8">
-        <div className="container mx-auto px-4 text-center text-gray-600">
+      <footer className="border-t border-white/10 py-8">
+        <div className="container mx-auto px-4 text-center text-slate-400">
           <p>&copy; 2026 BharatShort AI. All rights reserved.</p>
         </div>
       </footer>

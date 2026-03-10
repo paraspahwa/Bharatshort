@@ -4,9 +4,9 @@ import { generateVideoFromImage, waitForVideoCompletion } from './api/haiper'
 import { generateVoiceForLanguage } from './api/tts'
 import { uploadImage, uploadVideo, uploadAudio, downloadFromUrl } from './storage'
 import { combineVideos, addAudioToVideo, addCaptionsToVideo, extractThumbnail } from './video-processor'
-import { checkUserCredits, deductCredits, calculateProjectCredits } from './credits'
+import { checkUserCredits, deductCredits, deductCreditsIdempotent, calculateProjectCredits } from './credits'
 import { getSupabaseAdmin } from './supabase'
-import { updateJobStatus } from './queue'
+import { heartbeatGenerationJob, updateJobStatus } from './queue'
 
 export interface VideoGenerationOptions {
   topic: string
@@ -44,48 +44,121 @@ export async function generateVideo(
       throw new Error('Insufficient credits')
     }
 
-    // Step 2: Generate script
+    // Step 2: Generate script (or resume from persisted script)
+    let script: { title: string; scenes: ScriptScene[]; totalDuration: number } | null = null
     await updateProgress(jobId, 10, 'Generating script')
-    const script = await generateScript(topic, language, duration)
-    
-    // Save script to database
-    await (getSupabaseAdmin() as any)
-      .from('projects')
-      .update({ 
-        title: script.title,
-        script: JSON.stringify(script),
-        duration: script.totalDuration 
-      })
-      .eq('id', projectId)
 
-    // Deduct credits for script generation
-    await deductCredits(userId, projectId, 5, 'Script generation')
+    const { data: existingProject } = await (getSupabaseAdmin() as any)
+      .from('projects')
+      .select('title, script, duration, video_url, thumbnail_url, status')
+      .eq('id', projectId)
+      .maybeSingle()
+
+    if (existingProject?.video_url && existingProject?.thumbnail_url) {
+      await updateProgress(jobId, 100, 'Completed')
+      return {
+        success: true,
+        projectId,
+        videoUrl: existingProject.video_url,
+        thumbnailUrl: existingProject.thumbnail_url,
+        creditsUsed: 0,
+      }
+    }
+
+    if (existingProject?.script) {
+      try {
+        script = JSON.parse(existingProject.script) as {
+          title: string
+          scenes: ScriptScene[]
+          totalDuration: number
+        }
+      } catch (error) {
+        script = null
+      }
+    }
+
+    if (!script) {
+      script = await generateScript(topic, language, duration)
+
+      // Save script to database
+      await (getSupabaseAdmin() as any)
+        .from('projects')
+        .update({
+          title: script.title,
+          script: JSON.stringify(script),
+          duration: script.totalDuration,
+        })
+        .eq('id', projectId)
+
+      // Deduct credits for script generation once.
+      if (jobId) {
+        await deductCreditsIdempotent(
+          userId,
+          projectId,
+          jobId,
+          5,
+          'Script generation',
+          'script_generation'
+        )
+      } else {
+        await deductCredits(userId, projectId, 5, 'Script generation')
+      }
+    }
 
     // Step 3: Generate images for each scene
     await updateProgress(jobId, 20, 'Generating images')
     const imageUrls: string[] = []
+
+    const { data: existingScenesData } = await (getSupabaseAdmin() as any)
+      .from('scenes')
+      .select('sequence_order, image_url, video_url, text_content, image_prompt, duration')
+      .eq('project_id', projectId)
+
+    const existingScenes = new Map<number, any>()
+    ;(existingScenesData || []).forEach((scene: any) => {
+      existingScenes.set(scene.sequence_order, scene)
+    })
     
     for (let i = 0; i < script.scenes.length; i++) {
       const scene = script.scenes[i]
-      const image = await generateVideoSceneImage(scene.imagePrompt, i + 1, script.scenes.length)
-      
-      // Download and upload to our storage
-      const imageBuffer = await downloadFromUrl(image.url)
-      const { url } = await uploadImage(imageBuffer, `scene-${i + 1}.jpg`)
-      imageUrls.push(url)
+      const existingScene = existingScenes.get(i + 1)
 
-      // Save scene to database
-      await (getSupabaseAdmin() as any).from('scenes').insert({
-        project_id: projectId,
-        sequence_order: i + 1,
-        text_content: scene.text,
-        image_prompt: scene.imagePrompt,
-        image_url: url,
-        duration: scene.duration,
-      })
+      if (existingScene?.image_url) {
+        imageUrls.push(existingScene.image_url)
+      } else {
+        const image = await generateVideoSceneImage(scene.imagePrompt, i + 1, script.scenes.length)
 
-      // Deduct credits for image generation
-      await deductCredits(userId, projectId, 3, `Image generation - Scene ${i + 1}`)
+        // Download and upload to our storage
+        const imageBuffer = await downloadFromUrl(image.url)
+        const { url } = await uploadImage(imageBuffer, `scene-${i + 1}.jpg`)
+        imageUrls.push(url)
+
+        // Upsert scene row
+        await (getSupabaseAdmin() as any).from('scenes').upsert({
+          project_id: projectId,
+          sequence_order: i + 1,
+          text_content: scene.text,
+          image_prompt: scene.imagePrompt,
+          image_url: url,
+          duration: scene.duration,
+        }, {
+          onConflict: 'project_id,sequence_order',
+        })
+
+        // Deduct credits for newly generated images only.
+        if (jobId) {
+          await deductCreditsIdempotent(
+            userId,
+            projectId,
+            jobId,
+            3,
+            `Image generation - Scene ${i + 1}`,
+            `image_scene_${i + 1}`
+          )
+        } else {
+          await deductCredits(userId, projectId, 3, `Image generation - Scene ${i + 1}`)
+        }
+      }
       
       await updateProgress(jobId, 20 + (i + 1) * (20 / script.scenes.length), `Generated image ${i + 1}/${script.scenes.length}`)
     }
@@ -97,35 +170,51 @@ export async function generateVideo(
     for (let i = 0; i < imageUrls.length; i++) {
       const imageUrl = imageUrls[i]
       const scene = script.scenes[i]
-      
-      const videoGeneration = await generateVideoFromImage({
-        imageUrl,
-        prompt: 'smooth cinematic movement, professional quality',
-        duration: scene.duration,
-      })
+      const existingScene = existingScenes.get(i + 1)
 
-      // Wait for video to complete
-      const completedVideo = await waitForVideoCompletion(videoGeneration.id)
-      
-      if (!completedVideo.url) {
-        throw new Error(`Failed to generate video for scene ${i + 1}`)
+      if (existingScene?.video_url) {
+        videoUrls.push(existingScene.video_url)
+      } else {
+        const videoGeneration = await generateVideoFromImage({
+          imageUrl,
+          prompt: 'smooth cinematic movement, professional quality',
+          duration: scene.duration,
+        })
+
+        // Wait for video to complete
+        const completedVideo = await waitForVideoCompletion(videoGeneration.id)
+
+        if (!completedVideo.url) {
+          throw new Error(`Failed to generate video for scene ${i + 1}`)
+        }
+
+        // Download and upload to our storage
+        const videoBuffer = await downloadFromUrl(completedVideo.url)
+        const { url } = await uploadVideo(videoBuffer, `scene-${i + 1}.mp4`)
+        videoUrls.push(url)
+
+        // Update scene with video URL
+        await (getSupabaseAdmin() as any)
+          .from('scenes')
+          .update({ video_url: url })
+          .eq('project_id', projectId)
+          .eq('sequence_order', i + 1)
+
+        // Deduct credits for newly generated videos only.
+        const videoCredits = Math.ceil(scene.duration * 2)
+        if (jobId) {
+          await deductCreditsIdempotent(
+            userId,
+            projectId,
+            jobId,
+            videoCredits,
+            `Video generation - Scene ${i + 1}`,
+            `video_scene_${i + 1}`
+          )
+        } else {
+          await deductCredits(userId, projectId, videoCredits, `Video generation - Scene ${i + 1}`)
+        }
       }
-
-      // Download and upload to our storage
-      const videoBuffer = await downloadFromUrl(completedVideo.url)
-      const { url } = await uploadVideo(videoBuffer, `scene-${i + 1}.mp4`)
-      videoUrls.push(url)
-
-      // Update scene with video URL
-      await (getSupabaseAdmin() as any)
-        .from('scenes')
-        .update({ video_url: url })
-        .eq('project_id', projectId)
-        .eq('sequence_order', i + 1)
-
-      // Deduct credits for video generation
-      const videoCredits = Math.ceil(scene.duration * 2)
-      await deductCredits(userId, projectId, videoCredits, `Video generation - Scene ${i + 1}`)
       
       await updateProgress(jobId, 40 + (i + 1) * (25 / script.scenes.length), `Generated video ${i + 1}/${script.scenes.length}`)
     }
@@ -144,7 +233,18 @@ export async function generateVideo(
     // For simplicity, we'll use the first audio for now
     // In production, you'd want to concatenate them properly with timing
     const voiceCredits = Math.ceil(duration * 0.5)
-    await deductCredits(userId, projectId, voiceCredits, 'Voice narration')
+    if (jobId) {
+      await deductCreditsIdempotent(
+        userId,
+        projectId,
+        jobId,
+        voiceCredits,
+        'Voice narration',
+        'voice_narration'
+      )
+    } else {
+      await deductCredits(userId, projectId, voiceCredits, 'Voice narration')
+    }
 
     // Step 6: Combine everything
     await updateProgress(jobId, 75, 'Combining video clips')
@@ -260,4 +360,23 @@ async function updateProgress(
     currentStep: step,
     status: progress >= 100 ? 'completed' : 'processing',
   })
+
+  await heartbeatGenerationJob(jobId, 180, Math.round(progress), step).catch(() => {
+    // Keep Redis updates as a fallback channel even when SQL heartbeat fails.
+  })
+
+  await (getSupabaseAdmin() as any)
+    .from('generation_jobs')
+    .update({
+      progress: Math.round(progress),
+      current_step: step,
+      status: progress >= 100 ? 'completed' : 'processing',
+      last_heartbeat_at: new Date().toISOString(),
+      lease_expires_at: new Date(Date.now() + 180000).toISOString(),
+      ...(progress >= 100 ? { completed_at: new Date().toISOString() } : {}),
+    })
+    .eq('id', jobId)
+    .catch(() => {
+      // Progress mirroring should not break generation execution.
+    })
 }

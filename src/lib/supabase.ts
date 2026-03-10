@@ -158,9 +158,18 @@ export interface Database {
           project_id: string
           user_id: string
           status: 'queued' | 'processing' | 'completed' | 'failed'
+          idempotency_key: string | null
+          attempt_count: number
+          retry_at: string | null
+          max_attempts: number
+          lease_expires_at: string | null
+          last_heartbeat_at: string | null
           current_step: string | null
           progress: number
           error_message: string | null
+          error_code: string | null
+          error_stage: string | null
+          error_context: Record<string, any> | null
           started_at: string | null
           completed_at: string | null
           created_at: string
@@ -169,15 +178,33 @@ export interface Database {
           project_id: string
           user_id: string
           status?: 'queued' | 'processing' | 'completed' | 'failed'
+          idempotency_key?: string | null
+          attempt_count?: number
+          retry_at?: string | null
+          max_attempts?: number
+          lease_expires_at?: string | null
+          last_heartbeat_at?: string | null
           current_step?: string | null
           progress?: number
           error_message?: string | null
+          error_code?: string | null
+          error_stage?: string | null
+          error_context?: Record<string, any> | null
         }
         Update: {
           status?: 'queued' | 'processing' | 'completed' | 'failed'
+          idempotency_key?: string | null
+          attempt_count?: number
+          retry_at?: string | null
+          max_attempts?: number
+          lease_expires_at?: string | null
+          last_heartbeat_at?: string | null
           current_step?: string | null
           progress?: number
           error_message?: string | null
+          error_code?: string | null
+          error_stage?: string | null
+          error_context?: Record<string, any> | null
           started_at?: string | null
           completed_at?: string | null
         }

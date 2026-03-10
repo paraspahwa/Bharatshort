@@ -55,19 +55,19 @@ export default function CreatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b">
+      <header className="border-b border-white/10 bg-[#05070f]/70 backdrop-blur-xl">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/dashboard" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition">
+            <Link href="/dashboard" className="flex items-center gap-2 text-slate-300 transition hover:text-white">
               <ArrowLeft className="w-5 h-5" />
               <span>Back to Dashboard</span>
             </Link>
             
-            <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 rounded-lg">
-              <span className="text-sm text-gray-600">Credits:</span>
-              <span className="font-semibold text-gray-900">{credits || 0}</span>
+            <div className="aurora-chip flex items-center gap-2 rounded-lg px-4 py-2">
+              <span className="text-sm text-slate-200">Credits:</span>
+              <span className="font-semibold text-white">{credits || 0}</span>
             </div>
           </div>
         </div>
@@ -76,48 +76,48 @@ export default function CreatePage() {
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-800 rounded-full mb-4">
-              <Sparkles className="w-4 h-4" />
+            <div className="aurora-chip mb-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-slate-100">
+              <Sparkles className="w-4 h-4 text-orange-300" />
               <span className="text-sm font-medium">AI Video Generator</span>
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-3">
+            <h1 className="mb-3 font-[var(--font-display)] text-4xl font-bold text-white">
               Create Your Video
             </h1>
-            <p className="text-gray-600 text-lg">
+            <p className="text-lg text-slate-300">
               Just tell us what you want, and AI will handle the rest
             </p>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl p-8">
+          <div className="glass-card animate-rise-in rounded-2xl p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Topic Input */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="mb-2 block text-sm font-semibold text-slate-200">
                   Video Topic *
                 </label>
                 <textarea
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                  className="w-full resize-none rounded-xl border border-white/20 bg-[#0d1324] px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-400"
                   rows={4}
                   placeholder="e.g., Top 5 benefits of morning exercise, History of the Taj Mahal, How to make perfect chai..."
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="mt-1 text-xs text-slate-400">
                   Be specific! Better topics = better videos
                 </p>
               </div>
 
               {/* Language Selection */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="mb-2 block text-sm font-semibold text-slate-200">
                   <Globe className="w-4 h-4 inline mr-1" />
                   Language
                 </label>
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full rounded-xl border border-white/20 bg-[#0d1324] px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-400"
                 >
                   <option value="en">English</option>
                   <option value="hi">Hindi (हिन्दी)</option>
@@ -129,7 +129,7 @@ export default function CreatePage() {
 
               {/* Duration Selection */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="mb-2 block text-sm font-semibold text-slate-200">
                   <Clock className="w-4 h-4 inline mr-1" />
                   Video Duration: {duration} seconds
                 </label>
@@ -142,7 +142,7 @@ export default function CreatePage() {
                   onChange={(e) => setDuration(parseInt(e.target.value))}
                   className="w-full"
                 />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <div className="mt-1 flex justify-between text-xs text-slate-400">
                   <span>30s</span>
                   <span>60s</span>
                   <span>90s</span>
@@ -150,12 +150,12 @@ export default function CreatePage() {
               </div>
 
               {/* Cost Estimate */}
-              <div className="bg-orange-50 rounded-lg p-4">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">Estimated Cost</span>
-                  <span className="text-xl font-bold text-orange-600">{estimatedCredits} credits</span>
+                  <span className="text-sm font-medium text-slate-200">Estimated Cost</span>
+                  <span className="text-xl font-bold text-orange-300">{estimatedCredits} credits</span>
                 </div>
-                <div className="text-xs text-gray-600 space-y-1">
+                <div className="space-y-1 text-xs text-slate-300">
                   <div className="flex justify-between">
                     <span>Script generation</span>
                     <span>5 credits</span>
@@ -179,7 +179,7 @@ export default function CreatePage() {
               <button
                 type="submit"
                 disabled={loading || (credits || 0) < estimatedCredits}
-                className="w-full py-4 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 py-4 text-lg font-semibold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? (
                   <>
@@ -195,7 +195,7 @@ export default function CreatePage() {
               </button>
 
               {(credits || 0) < estimatedCredits && (
-                <p className="text-sm text-red-600 text-center">
+                <p className="text-center text-sm text-red-300">
                   Insufficient credits. You need {estimatedCredits} credits but have {credits || 0}.
                 </p>
               )}
@@ -209,10 +209,10 @@ export default function CreatePage() {
               { icon: '🎨', title: 'AI-Powered', text: 'Professional quality' },
               { icon: '📱', title: 'Ready to Share', text: 'All platforms' },
             ].map((item, index) => (
-              <div key={index} className="bg-white rounded-lg p-4 text-center">
+              <div key={index} className="glass-card rounded-lg p-4 text-center">
                 <div className="text-3xl mb-2">{item.icon}</div>
-                <div className="font-semibold text-gray-900">{item.title}</div>
-                <div className="text-sm text-gray-600">{item.text}</div>
+                <div className="font-semibold text-white">{item.title}</div>
+                <div className="text-sm text-slate-300">{item.text}</div>
               </div>
             ))}
           </div>

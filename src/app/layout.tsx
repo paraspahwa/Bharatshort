@@ -1,10 +1,11 @@
-import { Inter } from 'next/font/google'
+import { Space_Grotesk, Manrope } from 'next/font/google'
 import './globals.css'
 import type { Metadata } from 'next'
 import { Toaster } from 'react-hot-toast'
 import { Providers } from './providers'
 
-const inter = Inter({ subsets: ['latin'] })
+const displayFont = Space_Grotesk({ subsets: ['latin'], variable: '--font-display' })
+const bodyFont = Manrope({ subsets: ['latin'], variable: '--font-body' })
 
 export const metadata: Metadata = {
   title: 'BharatShort AI - AI-Powered Short Video Generator',
@@ -19,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={`${displayFont.variable} ${bodyFont.variable} font-[var(--font-body)]`}>
         <Providers>
           {children}
           <Toaster position="top-right" />

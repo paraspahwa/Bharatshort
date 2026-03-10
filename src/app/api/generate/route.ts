@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient({ cookies: async () => cookieStore })
     
     // Check authentication
     const { data: { session } } = await supabase.auth.getSession()
@@ -25,9 +25,30 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { topic, language = 'en', duration = 60 } = body
+    const idempotencyKey = request.headers.get('Idempotency-Key') || body.idempotencyKey || null
 
     if (!topic) {
       return NextResponse.json({ error: 'Topic is required' }, { status: 400 })
+    }
+
+    // Return existing job for repeated idempotency keys.
+    if (idempotencyKey) {
+      const { data: existingJob } = await (supabase as any)
+        .from('generation_jobs')
+        .select('id, project_id, status')
+        .eq('user_id', session.user.id)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle()
+
+      if (existingJob) {
+        return NextResponse.json({
+          success: true,
+          projectId: existingJob.project_id,
+          jobId: existingJob.id,
+          message: 'Video generation already started for this idempotency key',
+          duplicate: true,
+        })
+      }
     }
 
     // Create project
@@ -47,20 +68,43 @@ export async function POST(request: NextRequest) {
       throw new Error('Failed to create project')
     }
 
-    // Add to queue
-    const jobId = await enqueueVideoJob(project.id, session.user.id)
+    // Persist job state in SQL as source of truth.
+    const { data: job, error: jobError } = await (supabase as any)
+      .from('generation_jobs')
+      .insert({
+        project_id: project.id,
+        user_id: session.user.id,
+        status: 'queued',
+        progress: 0,
+        current_step: 'queued',
+        idempotency_key: idempotencyKey,
+        max_attempts: Number.parseInt(process.env.WORKER_MAX_ATTEMPTS || '3', 10),
+      })
+      .select('id')
+      .single()
 
-    // Start generation asynchronously
-    generateVideo({
-      topic,
-      language,
-      duration,
-      userId: session.user.id,
-      projectId: project.id,
-      jobId,
-    }).catch(error => {
-      console.error('Video generation error:', error)
-    })
+    if (jobError || !job) {
+      throw new Error('Failed to create generation job')
+    }
+
+    // Add to Redis queue (dispatch transport)
+    const jobId = await enqueueVideoJob(project.id, session.user.id, job.id)
+
+    // Backward-compatible execution mode.
+    // "inline" keeps current behavior until an external worker is rolled out.
+    const executionMode = process.env.GENERATION_EXECUTION_MODE || 'inline'
+    if (executionMode === 'inline') {
+      generateVideo({
+        topic,
+        language,
+        duration,
+        userId: session.user.id,
+        projectId: project.id,
+        jobId,
+      }).catch(error => {
+        console.error('Video generation error:', error)
+      })
+    }
 
     return NextResponse.json({
       success: true,

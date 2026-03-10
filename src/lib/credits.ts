@@ -144,6 +144,49 @@ export async function deductCredits(
 }
 
 /**
+ * Deduct credits exactly once per (jobId, chargeKey).
+ */
+export async function deductCreditsIdempotent(
+  userId: string,
+  projectId: string,
+  jobId: string,
+  amount: number,
+  description: string,
+  chargeKey: string
+): Promise<{ success: boolean; remainingCredits: number }> {
+  try {
+    const { data, error } = await (getSupabaseAdmin() as any).rpc('deduct_credits_idempotent', {
+      p_user_id: userId,
+      p_project_id: projectId,
+      p_job_id: jobId,
+      p_amount: amount,
+      p_description: description,
+      p_charge_key: chargeKey,
+    })
+
+    if (error) throw error
+
+    if (!data) {
+      throw new Error('Insufficient credits')
+    }
+
+    const { data: userData } = await getSupabaseAdmin()
+      .from('users')
+      .select('credits')
+      .eq('id', userId)
+      .single()
+
+    return {
+      success: true,
+      remainingCredits: (userData as any)?.credits || 0,
+    }
+  } catch (error) {
+    console.error('Error deducting idempotent credits:', error)
+    throw new Error('Failed to deduct idempotent credits')
+  }
+}
+
+/**
  * Add credits to user account
  */
 export async function addCredits(

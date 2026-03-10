@@ -45,34 +45,34 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="glass-card animate-rise-in rounded-3xl p-8">
           {/* Logo */}
           <div className="flex items-center justify-center gap-2 mb-8">
-            <Video className="w-10 h-10 text-orange-600" />
-            <span className="text-2xl font-bold text-gray-900">BharatShort AI</span>
+            <Video className="w-10 h-10 text-orange-400" />
+            <span className="font-[var(--font-display)] text-2xl font-bold text-white">BharatShort AI</span>
           </div>
 
-          <h1 className="text-3xl font-bold text-gray-900 text-center mb-2">
+          <h1 className="font-[var(--font-display)] text-3xl font-bold text-white text-center mb-2">
             Create Account
           </h1>
-          <p className="text-gray-600 text-center mb-8">
+          <p className="text-slate-300 text-center mb-8">
             Start creating AI videos in minutes
           </p>
 
           <form onSubmit={handleSignup} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-200 mb-2">
                 Full Name
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full rounded-xl border border-white/20 bg-[#0d1324] pl-10 pr-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-400"
                   placeholder="John Doe"
                   required
                 />
@@ -80,16 +80,16 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-200 mb-2">
                 Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full rounded-xl border border-white/20 bg-[#0d1324] pl-10 pr-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-400"
                   placeholder="you@example.com"
                   required
                 />
@@ -97,22 +97,22 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-200 mb-2">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full rounded-xl border border-white/20 bg-[#0d1324] pl-10 pr-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-400"
                   placeholder="••••••••"
                   required
                   minLength={6}
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="mt-1 text-xs text-slate-400">
                 Must be at least 6 characters
               </p>
             </div>
@@ -120,24 +120,24 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-xl bg-orange-500 py-3 font-semibold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? 'Creating account...' : 'Sign Up'}
             </button>
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-gray-600">
+            <p className="text-slate-300">
               Already have an account?{' '}
-              <Link href="/login" className="text-orange-600 hover:text-orange-700 font-semibold">
+              <Link href="/login" className="font-semibold text-orange-300 hover:text-orange-200">
                 Log In
               </Link>
             </p>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-sm text-gray-500 text-center">
-              🎉 Get <span className="font-bold text-orange-600">100 free credits</span> when you sign up!
+          <div className="mt-8 border-t border-white/10 pt-6">
+            <p className="text-center text-sm text-slate-300">
+              Get <span className="font-bold text-orange-300">100 free credits</span> when you sign up.
             </p>
           </div>
         </div>
