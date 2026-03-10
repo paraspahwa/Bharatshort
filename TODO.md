@@ -249,5 +249,12 @@ Validation targets:
 - [ ] Health and metrics checks passing.
 - [x] Landing Phase A extracted to section components.
 - [x] Landing Phase B messaging and trust blocks shipped.
-- [ ] Landing Phase C visual polish validated on desktop/mobile.
-- [ ] Landing Phase D instrumentation added and tested.
+- [x] Landing Phase C visual polish validated on desktop/mobile.
+- [x] Landing Phase D instrumentation added and tested.
+- [x] Dev-mode analytics debug panel added for landing event QA.
+- [x] GA4 env-gated sink wired for landing analytics events.
+- [x] Landing analytics event matrix documented.
+- [x] A/B-ready landing variant and session context attached to events.
+- [x] Landing use-case matrix section shipped.
+- [x] Landing FAQ section shipped with expand-event tracking.
+- [x] Weekly variant comparison analytics report template added.

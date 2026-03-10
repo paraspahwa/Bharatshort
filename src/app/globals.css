@@ -71,6 +71,18 @@
     animation: drift-grid 36s linear infinite;
     pointer-events: none;
   }
+
+  .animate-stagger-1 {
+    animation-delay: 80ms;
+  }
+
+  .animate-stagger-2 {
+    animation-delay: 160ms;
+  }
+
+  .animate-stagger-3 {
+    animation-delay: 240ms;
+  }
 }
 
 /* Custom scrollbar */
@@ -151,3 +163,13 @@
 .animate-pulse-glow {
   animation: pulse-glow 2.6s ease-in-out infinite;
 }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-rise-in,
+    .animate-pulse-glow,
+    .animate-shimmer,
+    .animated-grid::before {
+      animation: none !important;
+      transform: none !important;
+    }
+  }

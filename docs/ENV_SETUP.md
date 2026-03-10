@@ -135,6 +135,7 @@ UPSTASH_REDIS_REST_TOKEN=AXxxxxxxxxxxxx
 ```env
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 DEFAULT_USER_CREDITS=100
+NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 ```
 
 **Development:**
@@ -142,6 +143,10 @@ DEFAULT_USER_CREDITS=100
 
 **Production:**
 - Update to your Vercel domain: `https://your-app.vercel.app`
+
+**Analytics (optional):**
+- Set `NEXT_PUBLIC_GA_MEASUREMENT_ID` to enable GA4 event capture for landing instrumentation.
+- If unset, events remain available in `window.dataLayer` and the dev analytics debug panel.
 
 ---
 
