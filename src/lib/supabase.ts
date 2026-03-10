@@ -139,6 +139,7 @@ export interface Database {
           id: string
           user_id: string
           project_id: string | null
+          payment_order_id: string | null
           amount: number
           transaction_type: 'usage' | 'purchase' | 'bonus' | 'refund'
           description: string | null
@@ -147,9 +148,69 @@ export interface Database {
         Insert: {
           user_id: string
           project_id?: string | null
+          payment_order_id?: string | null
           amount: number
           transaction_type: 'usage' | 'purchase' | 'bonus' | 'refund'
           description?: string | null
+        }
+      }
+      payment_order_reconciliation_runs: {
+        Row: {
+          id: string
+          actor: string
+          repair_mode: boolean
+          scanned_count: number
+          repaired_count: number
+          created_at: string
+        }
+        Insert: {
+          actor?: string
+          repair_mode?: boolean
+          scanned_count?: number
+          repaired_count?: number
+        }
+      }
+      payment_orders: {
+        Row: {
+          id: string
+          user_id: string
+          plan_id: string
+          credits: number
+          currency: string
+          amount_subunits: number
+          status: 'created' | 'paid' | 'failed' | 'refunded'
+          razorpay_order_id: string
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
+          geo_country_code: string | null
+          metadata: Record<string, any> | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          plan_id: string
+          credits: number
+          currency: string
+          amount_subunits: number
+          status?: 'created' | 'paid' | 'failed' | 'refunded'
+          razorpay_order_id: string
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          geo_country_code?: string | null
+          metadata?: Record<string, any> | null
+        }
+        Update: {
+          plan_id?: string
+          credits?: number
+          currency?: string
+          amount_subunits?: number
+          status?: 'created' | 'paid' | 'failed' | 'refunded'
+          razorpay_order_id?: string
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          geo_country_code?: string | null
+          metadata?: Record<string, any> | null
         }
       }
       generation_jobs: {

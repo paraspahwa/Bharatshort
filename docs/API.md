@@ -80,6 +80,233 @@ Get the status of a video generation job.
 
 ---
 
+### GET /api/payments/plans
+
+Fetches credit plans localized by Geo-IP currency.
+
+**Response:**
+```json
+{
+  "geo": {
+    "ip": "1.2.3.4",
+    "countryCode": "IN",
+    "currency": "INR",
+    "source": "vercel-header"
+  },
+  "currency": "INR",
+  "plans": [
+    {
+      "id": "starter_100",
+      "title": "Starter",
+      "credits": 100,
+      "amountSubunits": 19900,
+      "currency": "INR"
+    }
+  ]
+}
+```
+
+---
+
+### POST /api/payments/order
+
+Creates a Razorpay order for a selected credit plan.
+
+**Request Body:**
+```json
+{
+  "planId": "starter_100"
+}
+```
+
+---
+
+### POST /api/payments/verify
+
+Verifies Razorpay client payment signature and credits the user account.
+Payment status transition and credit grant are applied atomically in DB.
+
+**Request Body:**
+```json
+{
+  "razorpay_order_id": "order_xxx",
+  "razorpay_payment_id": "pay_xxx",
+  "razorpay_signature": "signature"
+}
+```
+
+---
+
+### POST /api/payments/webhook
+
+Razorpay webhook handler for server-to-server payment events.
+Webhook capture is idempotent and uses the same atomic DB capture path as verify.
+
+**Headers:**
+- `x-razorpay-signature` (required)
+
+---
+
+### Payment Reliability Notes
+
+- Apply migration [supabase/migrations/010_payment_capture_atomic.sql](supabase/migrations/010_payment_capture_atomic.sql)
+  to enable atomic credit grant on payment capture.
+- Duplicate verify/webhook events will not double-credit users.
+
+---
+
+### POST /api/internal/payments/reconcile
+
+Internal reconciliation endpoint for paid Razorpay orders and granted credits.
+
+**Authorization:**
+- `x-worker-secret` header matching `WORKER_SECRET`, or
+- `x-vercel-cron: 1` (when invoked by Vercel Cron)
+
+**Request Body:**
+```json
+{
+  "repair": false,
+  "limit": 100,
+  "actor": "ops_manual"
+}
+```
+
+**Response:**
+```json
+{
+  "repair": false,
+  "limit": 100,
+  "scanned": 2,
+  "repaired": 0,
+  "mismatches": [
+    {
+      "payment_order_id": "uuid",
+      "user_id": "uuid",
+      "credits": 300,
+      "issue": "missing_credit_transaction",
+      "repaired": false
+    }
+  ]
+}
+```
+
+Apply migration [supabase/migrations/011_payment_reconciliation.sql](supabase/migrations/011_payment_reconciliation.sql)
+to enable reconciliation and linked payment-order credit transactions.
+
+---
+
+### GET /api/internal/payments/reconcile/run
+
+Scheduled daily dry-run reconciliation endpoint. Intended to be triggered by cron.
+
+**Authorization:**
+- `x-worker-secret` header matching `WORKER_SECRET`, or
+- `x-vercel-cron: 1` (when invoked by Vercel Cron)
+
+**Environment controls:**
+- `PAYMENT_RECONCILE_CRON_ENABLED` (default: true)
+- `PAYMENT_RECONCILE_LIMIT` (default: 200)
+- `PAYMENT_RECON_ALERT_WEBHOOK_URL` (optional, sends mismatch alerts)
+
+**Response:**
+```json
+{
+  "success": true,
+  "repair": false,
+  "limit": 200,
+  "scanned": 0,
+  "mismatches": []
+}
+```
+
+---
+
+### GET /api/internal/payments/dashboard-reconcile
+
+Admin-only dashboard endpoint to fetch recent reconciliation runs.
+
+**Authentication:**
+- Supabase session cookie
+- User email must be listed in `ADMIN_EMAILS`
+
+**Response:**
+```json
+{
+  "runs": [
+    {
+      "id": "uuid",
+      "actor": "dashboard:admin@example.com",
+      "repair_mode": false,
+      "scanned_count": 3,
+      "repaired_count": 0,
+      "created_at": "2026-03-10T20:31:10.123Z"
+    }
+  ]
+}
+```
+
+### POST /api/internal/payments/dashboard-reconcile
+
+Admin-only dashboard endpoint to run reconciliation from UI.
+
+**Request Body:**
+```json
+{
+  "repair": false,
+  "limit": 100
+}
+```
+
+**Response:**
+```json
+{
+  "repair": false,
+  "limit": 100,
+  "scanned": 2,
+  "repaired": 0,
+  "mismatches": [
+    {
+      "payment_order_id": "uuid",
+      "user_id": "uuid",
+      "credits": 300,
+      "issue": "missing_credit_transaction",
+      "repaired": false
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/payments/history
+
+Returns authenticated user's Razorpay order history.
+
+**Query Parameters:**
+- `limit` (optional): Number of records to return (1-100, default 20)
+
+**Response:**
+```json
+{
+  "payments": [
+    {
+      "id": "uuid",
+      "plan_id": "starter_100",
+      "credits": 100,
+      "currency": "INR",
+      "amount_subunits": 19900,
+      "status": "paid",
+      "razorpay_order_id": "order_xxx",
+      "razorpay_payment_id": "pay_xxx",
+      "created_at": "2026-03-10T20:31:10.123Z"
+    }
+  ]
+}
+```
+
+---
+
 ### POST /api/internal/jobs/process
 
 Internal endpoint for workers to process one queued generation job.
@@ -194,6 +421,39 @@ Server-side proxy endpoint intended for in-app dashboard visibility.
 
 ---
 
+### GET /api/internal/jobs/health
+
+Internal configuration health endpoint that validates required environment
+variables by subsystem and returns pass/warn/fail status.
+
+**Authorization:**
+- `x-worker-secret` header matching `WORKER_SECRET`, or
+- `x-vercel-cron: 1` (when invoked by Vercel Cron)
+
+**Response:**
+```json
+{
+  "generatedAt": "2026-03-10T20:31:10.123Z",
+  "overallStatus": "warn",
+  "executionMode": "queue",
+  "checks": [
+    {
+      "name": "supabase",
+      "status": "ok",
+      "missing": []
+    },
+    {
+      "name": "worker_tuning",
+      "status": "warn",
+      "missing": [],
+      "notes": ["WORKER_MAX_ATTEMPTS is not set; DB default max attempts will be used"]
+    }
+  ]
+}
+```
+
+---
+
 ### GET /api/user
 
 Get current user data and statistics.
@@ -248,6 +508,9 @@ job-scoped idempotency ledger key, so retries do not double-charge the same step
 Worker retries use exponential backoff for transient errors. Once max attempts
 are exhausted, jobs are marked failed with a dead-letter style error code
 (`WORKER_RETRY_EXHAUSTED`) for operational triage.
+
+When `REFUND_ON_TERMINAL_FAILURE=true`, the system automatically refunds
+idempotent generation charges for jobs that reach terminal failure.
 
 ## Example Usage
 

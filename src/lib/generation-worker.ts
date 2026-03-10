@@ -8,6 +8,7 @@ import {
   requeueGenerationJob,
 } from './queue'
 import { generateVideo } from './video-generator'
+import { refundGenerationJobCharges } from './credits'
 
 interface ProcessResult {
   claimed: boolean
@@ -125,6 +126,16 @@ export async function processOneGenerationJob(): Promise<ProcessResult> {
         retryable,
       }
     )
+
+    const refundOnFailure = (process.env.REFUND_ON_TERMINAL_FAILURE || 'true') === 'true'
+    if (refundOnFailure) {
+      await refundGenerationJobCharges(
+        jobId,
+        `Auto refund after terminal failure (${retryable ? 'retry exhausted' : 'non-retryable'})`
+      ).catch((refundError) => {
+        console.error('Failed to auto-refund job charges:', refundError)
+      })
+    }
 
     await (getSupabaseAdmin() as any)
       .from('projects')

@@ -187,6 +187,27 @@ export async function deductCreditsIdempotent(
 }
 
 /**
+ * Refund all idempotent generation charges for a terminally failed job.
+ */
+export async function refundGenerationJobCharges(
+  jobId: string,
+  reason: string = 'Terminal generation failure refund'
+): Promise<number> {
+  try {
+    const { data, error } = await (getSupabaseAdmin() as any).rpc('refund_generation_job_charges', {
+      p_job_id: jobId,
+      p_reason: reason,
+    })
+
+    if (error) throw error
+    return Number(data || 0)
+  } catch (error) {
+    console.error('Error refunding generation job charges:', error)
+    throw new Error('Failed to refund generation job charges')
+  }
+}
+
+/**
  * Add credits to user account
  */
 export async function addCredits(

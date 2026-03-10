@@ -8,6 +8,10 @@
     {
       "path": "/api/internal/jobs/run",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/payments/reconcile/run",
+      "schedule": "0 2 * * *"
     }
   ]
 }
