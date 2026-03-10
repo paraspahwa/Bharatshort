@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSupabase } from '../providers'
 import Link from 'next/link'
@@ -107,6 +107,35 @@ interface AdminAuditResponse {
   hasMore: boolean
 }
 
+interface CostRollupRow {
+  day: string
+  total_cost_usd: number | string
+  total_revenue_usd: number | string
+  total_credits_sold: number
+  margin_percent: number | string
+}
+
+interface CostSummarySnapshot {
+  totalCostUsd: number
+  totalRevenueUsd: number
+  grossMarginUsd: number
+  marginPercent: number
+  totalCreditsSold: number
+  totalRefundedCredits: number
+  costPerCreditUsd: number
+  revenuePerCreditUsd: number
+  totalJobs: number
+  completedJobs: number
+  failedJobs: number
+  paidOrders: number
+}
+
+interface CostDashboardSummaryResponse {
+  days: number
+  summary: CostSummarySnapshot
+  rows: CostRollupRow[]
+}
+
 export default function DashboardPage() {
   const { user, supabase, credits, refreshCredits } = useSupabase()
   const router = useRouter()
@@ -125,6 +154,8 @@ export default function DashboardPage() {
   const [reconcileLoading, setReconcileLoading] = useState(false)
   const [reconcileAction, setReconcileAction] = useState<'dry-run' | 'repair' | null>(null)
   const [showAdminPanel, setShowAdminPanel] = useState(false)
+  const [showCostPanel, setShowCostPanel] = useState(false)
+  const [costSummary, setCostSummary] = useState<CostDashboardSummaryResponse | null>(null)
   const [adminUsers, setAdminUsers] = useState<DashboardAdminUser[]>([])
   const [adminAuditEvents, setAdminAuditEvents] = useState<AdminAuditEvent[]>([])
   const [adminAuditActionFilter, setAdminAuditActionFilter] = useState<'all' | 'grant' | 'revoke'>('all')
@@ -138,6 +169,111 @@ export default function DashboardPage() {
   const [adminLoading, setAdminLoading] = useState(false)
   const [adminActionUserId, setAdminActionUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const formatUsd = (value: number): string => {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 4,
+    }).format(value)
+  }
+
+  const toNumeric = (value: number | string | undefined | null): number => {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+
+  const fetchJsonWithTimeout = async <T,>(
+    url: string,
+    timeoutMs: number = 3000
+  ): Promise<{ ok: boolean; payload?: T }> => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+    try {
+      const response = await fetch(url, { signal: controller.signal })
+      if (!response.ok) {
+        return { ok: false }
+      }
+
+      const payload = (await response.json()) as T
+      return { ok: true, payload }
+    } catch {
+      return { ok: false }
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  const costTrend = useMemo(() => {
+    if (!costSummary || !Array.isArray(costSummary.rows) || costSummary.rows.length < 2) {
+      return null
+    }
+
+    const rows = costSummary.rows
+    const latestWindow = rows.slice(0, 7)
+    const previousWindow = rows.slice(7, 14)
+
+    if (latestWindow.length === 0 || previousWindow.length === 0) {
+      return null
+    }
+
+    const avg = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length
+    const latestAvg = avg(latestWindow.map((row) => toNumeric(row.margin_percent)))
+    const previousAvg = avg(previousWindow.map((row) => toNumeric(row.margin_percent)))
+
+    return {
+      latestAvg,
+      previousAvg,
+      delta: latestAvg - previousAvg,
+    }
+  }, [costSummary])
+
+  const marginSparkline = useMemo(() => {
+    if (!costSummary || !Array.isArray(costSummary.rows) || costSummary.rows.length === 0) {
+      return null
+    }
+
+    const series = costSummary.rows
+      .slice(0, 14)
+      .reverse()
+      .map((row) => ({
+        day: row.day,
+        value: toNumeric(row.margin_percent),
+      }))
+
+    if (series.length < 2) {
+      return null
+    }
+
+    const values = series.map((item) => item.value)
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const width = 320
+    const height = 90
+    const pad = 8
+    const range = max - min || 1
+
+    const points = series
+      .map((item, index) => {
+        const x = pad + (index * (width - pad * 2)) / (series.length - 1)
+        const y = pad + ((max - item.value) * (height - pad * 2)) / range
+        return `${x},${y}`
+      })
+      .join(' ')
+
+    return {
+      points,
+      min,
+      max,
+      latest: series[series.length - 1],
+      earliest: series[0],
+      sampleSize: series.length,
+      width,
+      height,
+    }
+  }, [costSummary])
 
   useEffect(() => {
     if (!user) {
@@ -176,47 +312,72 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      const [userRes, metricsRes, reconcileRunsRes, adminUsersRes] = await Promise.all([
-        fetch('/api/user'),
-        fetch('/api/internal/jobs/dashboard-metrics'),
-        fetch('/api/internal/payments/dashboard-reconcile'),
-        fetch('/api/internal/admin/dashboard-users'),
-      ])
+      setLoadError(null)
 
-      if (userRes.ok) {
-        const result = await userRes.json()
-        setData(result)
+      // Core user payload should load first so dashboard is usable quickly.
+      const userResult = await fetchJsonWithTimeout<DashboardData>('/api/user', 5000)
+      if (!userResult.ok || !userResult.payload) {
+          setData(null)
+          setLoadError('Could not load dashboard data. Please retry.')
+          setShowWorkerPanel(false)
+          setShowReconcilePanel(false)
+          setShowAdminPanel(false)
+          setShowCostPanel(false)
+          setCostSummary(null)
+          setAdminAuditEvents([])
+          return
       }
 
-      if (metricsRes.ok) {
-        const metrics = await metricsRes.json()
-        setWorkerMetrics(metrics)
+      setData(userResult.payload)
+      setLoading(false)
+
+      // Optional panels should not block base dashboard rendering.
+      const [metricsResult, reconcileRunsResult, adminUsersResult, costSummaryResult] = await Promise.all([
+        fetchJsonWithTimeout<WorkerDashboardMetrics>('/api/internal/jobs/dashboard-metrics', 2500),
+        fetchJsonWithTimeout<{ runs: ReconcileRun[] }>('/api/internal/payments/dashboard-reconcile', 2500),
+        fetchJsonWithTimeout<{ admins: DashboardAdminUser[] }>('/api/internal/admin/dashboard-users', 2500),
+        fetchJsonWithTimeout<CostDashboardSummaryResponse>('/api/internal/costs/dashboard-summary?limit=14', 2500),
+      ])
+
+      if (metricsResult.ok && metricsResult.payload) {
+        setWorkerMetrics(metricsResult.payload)
         setShowWorkerPanel(true)
       } else {
         setShowWorkerPanel(false)
       }
 
-      if (reconcileRunsRes.ok) {
-        const reconcilePayload = await reconcileRunsRes.json()
-        setReconcileRuns(Array.isArray(reconcilePayload?.runs) ? reconcilePayload.runs : [])
+      if (reconcileRunsResult.ok && reconcileRunsResult.payload) {
+        const runs = reconcileRunsResult.payload.runs
+        setReconcileRuns(Array.isArray(runs) ? runs : [])
         setShowReconcilePanel(true)
       } else {
         setShowReconcilePanel(false)
       }
 
-      if (adminUsersRes.ok) {
-        const adminPayload = await adminUsersRes.json()
-        setAdminUsers(Array.isArray(adminPayload?.admins) ? adminPayload.admins : [])
+      if (adminUsersResult.ok && adminUsersResult.payload) {
+        const admins = adminUsersResult.payload.admins
+        setAdminUsers(Array.isArray(admins) ? admins : [])
         setShowAdminPanel(true)
         await fetchAdminAuditEvents(1, adminAuditActionFilter, adminAuditSearchQuery)
       } else {
         setShowAdminPanel(false)
       }
+
+      if (costSummaryResult.ok && costSummaryResult.payload) {
+        setCostSummary(costSummaryResult.payload)
+        setShowCostPanel(true)
+      } else {
+        setShowCostPanel(false)
+        setCostSummary(null)
+      }
     } catch (error) {
-      console.error('Error loading dashboard:', error)
+      console.error('Error loading dashboard')
+      setLoadError('Could not load dashboard. Please retry.')
       setShowWorkerPanel(false)
       setShowReconcilePanel(false)
       setShowAdminPanel(false)
+      setShowCostPanel(false)
+      setCostSummary(null)
       setAdminAuditEvents([])
     } finally {
       setLoading(false)
@@ -494,12 +655,35 @@ export default function DashboardPage() {
     }
   }
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-orange-400"></div>
           <p className="mt-4 text-slate-300">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="glass-card w-full max-w-md rounded-xl p-6 text-center">
+          <h2 className="font-[var(--font-display)] text-xl font-bold text-white">Dashboard Unavailable</h2>
+          <p className="mt-2 text-sm text-slate-300">
+            {loadError || 'The dashboard could not be loaded right now.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true)
+              void loadDashboardData()
+            }}
+            className="mt-4 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-400"
+          >
+            Retry
+          </button>
         </div>
       </div>
     )
@@ -967,6 +1151,113 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+          {showCostPanel && costSummary && (
+            <div className="glass-card mb-8 rounded-xl p-6">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-[var(--font-display)] text-xl font-bold text-white">Unit Economics</h2>
+                  <p className="mt-1 text-sm text-slate-300">Daily COGS and pricing efficiency for the last {costSummary.days} days.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadDashboardData}
+                  className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-orange-300 hover:text-orange-200"
+                >
+                  Refresh
+                </button>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs text-slate-300">Gross Margin</div>
+                  <div className="mt-1 text-2xl font-bold text-emerald-200">{toNumeric(costSummary.summary.marginPercent).toFixed(2)}%</div>
+                  <div className="mt-1 text-xs text-slate-400">{formatUsd(toNumeric(costSummary.summary.grossMarginUsd))}</div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs text-slate-300">Cost / Credit</div>
+                  <div className="mt-1 text-2xl font-bold text-rose-200">{formatUsd(toNumeric(costSummary.summary.costPerCreditUsd))}</div>
+                  <div className="mt-1 text-xs text-slate-400">USD per sold credit</div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs text-slate-300">Revenue / Credit</div>
+                  <div className="mt-1 text-2xl font-bold text-sky-200">{formatUsd(toNumeric(costSummary.summary.revenuePerCreditUsd))}</div>
+                  <div className="mt-1 text-xs text-slate-400">USD per sold credit</div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs text-slate-300">7D Margin Trend</div>
+                  {costTrend ? (
+                    <>
+                      <div className={`mt-1 text-2xl font-bold ${costTrend.delta >= 0 ? 'text-emerald-200' : 'text-amber-200'}`}>
+                        {costTrend.delta >= 0 ? '+' : ''}{costTrend.delta.toFixed(2)} pts
+                      </div>
+                      <div className="mt-1 text-xs text-slate-400">
+                        vs previous 7 days ({costTrend.latestAvg.toFixed(2)}% vs {costTrend.previousAvg.toFixed(2)}%)
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mt-1 text-2xl font-bold text-slate-200">Not enough data</div>
+                      <div className="mt-1 text-xs text-slate-400">Needs at least 14 daily rollup rows.</div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-white">Margin Trend (last 14 days)</h3>
+                  {marginSparkline && (
+                    <span className="text-xs text-slate-400">
+                      {marginSparkline.sampleSize} points | {marginSparkline.earliest.day} to {marginSparkline.latest.day}
+                    </span>
+                  )}
+                </div>
+
+                {marginSparkline ? (
+                  <div>
+                    <svg
+                      viewBox={`0 0 ${marginSparkline.width} ${marginSparkline.height}`}
+                      className="h-24 w-full"
+                      role="img"
+                      aria-label="Gross margin percent trend"
+                    >
+                      <polyline
+                        fill="none"
+                        stroke="rgba(148, 163, 184, 0.25)"
+                        strokeWidth="1"
+                        points={`8,8 ${marginSparkline.width - 8},8`}
+                      />
+                      <polyline
+                        fill="none"
+                        stroke="rgba(148, 163, 184, 0.25)"
+                        strokeWidth="1"
+                        points={`8,${marginSparkline.height - 8} ${marginSparkline.width - 8},${marginSparkline.height - 8}`}
+                      />
+                      <polyline
+                        fill="none"
+                        stroke="rgba(56, 189, 248, 0.95)"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        points={marginSparkline.points}
+                      />
+                    </svg>
+                    <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+                      <span>Min {marginSparkline.min.toFixed(2)}%</span>
+                      <span>Latest {marginSparkline.latest.value.toFixed(2)}%</span>
+                      <span>Max {marginSparkline.max.toFixed(2)}%</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-300">Not enough rollup history to render trendline.</p>
+                )}
+              </div>
+            </div>
+          )}
 
         {/* Recent Projects */}
         <div className="glass-card rounded-xl p-6">

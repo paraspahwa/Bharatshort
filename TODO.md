@@ -269,3 +269,14 @@ Validation targets:
 - [ ] Phase M2: Create + job status + project list flows implemented.
 - [ ] Phase M3: Play Billing + StoreKit purchase verification architecture implemented.
 - [ ] Phase M4: Push notifications and staged rollout runbook completed.
+
+## 9. Pricing and Cost Analytics
+
+- [x] Generation cost-event ledger added with stage/provider granularity.
+- [x] Daily COGS/revenue rollup migration and refresh function added.
+- [x] Internal cron/worker endpoint added for rollup refresh execution.
+- [x] Admin dashboard summary endpoint added for pricing visibility.
+- [x] Vercel cron schedule added for daily cost rollup refresh.
+- [x] ENV and deployment docs updated for pricing analytics operations.
+- [x] Dashboard unit-economics card added with 7-day margin trend delta.
+- [x] Dashboard margin sparkline added for 14-day visual trend.

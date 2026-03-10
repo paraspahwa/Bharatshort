@@ -280,6 +280,74 @@ Admin-only dashboard endpoint to run reconciliation from UI.
 }
 ```
 
+### GET /api/internal/costs/rollup/run
+
+Internal endpoint to refresh daily generation cost rollups.
+
+**Authorization:**
+- `x-worker-secret` header matching `WORKER_SECRET`, or
+- `x-vercel-cron: 1` (when invoked by Vercel Cron)
+
+**Environment controls:**
+- `COST_ROLLUP_CRON_ENABLED` (default: true)
+- `COST_ROLLUP_DAYS` (default: 30, max 365)
+- `COST_ROLLUP_INR_TO_USD` (default: 83)
+
+**Response:**
+```json
+{
+  "success": true,
+  "days": 30,
+  "inrToUsd": 83,
+  "latest": {
+    "day": "2026-03-10",
+    "total_cost_usd": "12.345600",
+    "total_revenue_usd": "24.567800",
+    "total_credits_sold": 1200,
+    "margin_percent": "49.7531"
+  },
+  "rows": []
+}
+```
+
+Apply migration [supabase/migrations/015_generation_cost_rollups.sql](supabase/migrations/015_generation_cost_rollups.sql)
+to enable daily pricing and COGS rollups.
+
+---
+
+### GET /api/internal/costs/dashboard-summary
+
+Admin-only dashboard endpoint to read cost/revenue rollup summaries.
+
+**Authentication:**
+- Supabase session cookie
+- User must have an active row in `public.admin_users`
+
+**Query Parameters:**
+- `limit` (optional): Days to return (1-120, default 30)
+
+**Response:**
+```json
+{
+  "days": 30,
+  "summary": {
+    "totalCostUsd": 120.123456,
+    "totalRevenueUsd": 310.987654,
+    "grossMarginUsd": 190.864198,
+    "marginPercent": 61.3732,
+    "totalCreditsSold": 12000,
+    "totalRefundedCredits": 320,
+    "costPerCreditUsd": 0.01001,
+    "revenuePerCreditUsd": 0.025915,
+    "totalJobs": 540,
+    "completedJobs": 498,
+    "failedJobs": 42,
+    "paidOrders": 87
+  },
+  "rows": []
+}
+```
+
 ### Admin Access Model
 
 - Apply migration [supabase/migrations/012_admin_users.sql](supabase/migrations/012_admin_users.sql)

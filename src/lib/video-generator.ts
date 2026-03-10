@@ -7,6 +7,7 @@ import { combineVideos, addAudioToVideo, addCaptionsToVideo, extractThumbnail } 
 import { checkUserCredits, deductCredits, deductCreditsIdempotent, calculateProjectCredits } from './credits'
 import { getSupabaseAdmin } from './supabase'
 import { heartbeatGenerationJob, updateJobStatus } from './queue'
+import { getEstimatedUnitCostUsd, recordGenerationCostEvent } from './cost-ledger'
 
 export interface VideoGenerationOptions {
   topic: string
@@ -80,6 +81,23 @@ export async function generateVideo(
     if (!script) {
       script = await generateScript(topic, language, duration)
 
+        await recordGenerationCostEvent({
+          jobId,
+          projectId,
+          userId,
+          stage: 'script_generation',
+          provider: 'openai',
+          operation: 'generate_script',
+          usageUnit: 'request',
+          usageQuantity: 1,
+          unitCostUsd: getEstimatedUnitCostUsd('scriptPerRequestUsd'),
+          metadata: {
+            language,
+            duration,
+            model: 'gpt-4o-mini',
+          },
+        })
+
       // Save script to database
       await (getSupabaseAdmin() as any)
         .from('projects')
@@ -127,6 +145,25 @@ export async function generateVideo(
         imageUrls.push(existingScene.image_url)
       } else {
         const image = await generateVideoSceneImage(scene.imagePrompt, i + 1, script.scenes.length)
+
+          await recordGenerationCostEvent({
+            jobId,
+            projectId,
+            userId,
+            stage: 'image_generation',
+            provider: 'nebius',
+            operation: 'generate_scene_image',
+            usageUnit: 'image',
+            usageQuantity: 1,
+            unitCostUsd: getEstimatedUnitCostUsd('imagePerSceneUsd'),
+            metadata: {
+              sceneNumber: i + 1,
+              totalScenes: script.scenes.length,
+              width: 1024,
+              height: 576,
+              model: 'flux-schnell',
+            },
+          })
 
         // Download and upload to our storage
         const imageBuffer = await downloadFromUrl(image.url)
@@ -181,6 +218,23 @@ export async function generateVideo(
           duration: scene.duration,
         })
 
+          await recordGenerationCostEvent({
+            jobId,
+            projectId,
+            userId,
+            stage: 'video_generation',
+            provider: 'haiper',
+            operation: 'image_to_video',
+            usageUnit: 'second',
+            usageQuantity: scene.duration,
+            unitCostUsd: getEstimatedUnitCostUsd('videoPerSecondUsd'),
+            metadata: {
+              sceneNumber: i + 1,
+              totalScenes: script.scenes.length,
+              prompt: 'smooth cinematic movement, professional quality',
+            },
+          })
+
         // Wait for video to complete
         const completedVideo = await waitForVideoCompletion(videoGeneration.id)
 
@@ -233,6 +287,24 @@ export async function generateVideo(
     // For simplicity, we'll use the first audio for now
     // In production, you'd want to concatenate them properly with timing
     const voiceCredits = Math.ceil(duration * 0.5)
+      const totalVoiceChars = script.scenes.reduce((sum, scene) => sum + scene.text.length, 0)
+
+      await recordGenerationCostEvent({
+        jobId,
+        projectId,
+        userId,
+        stage: 'voice_generation',
+        provider: language === 'hi' ? 'bhashini' : 'google_tts',
+        operation: 'synthesize_voice',
+        usageUnit: 'character',
+        usageQuantity: totalVoiceChars,
+        unitCostUsd: getEstimatedUnitCostUsd('voicePerCharacterUsd'),
+        metadata: {
+          language,
+          sceneCount: script.scenes.length,
+        },
+      })
+
     if (jobId) {
       await deductCreditsIdempotent(
         userId,
@@ -276,6 +348,23 @@ export async function generateVideo(
     
     finalVideo = await addCaptionsToVideo(finalVideo, captions)
 
+      await recordGenerationCostEvent({
+        jobId,
+        projectId,
+        userId,
+        stage: 'post_processing',
+        provider: 'ffmpeg',
+        operation: 'compose_and_caption',
+        usageUnit: 'second',
+        usageQuantity: duration,
+        unitCostUsd: getEstimatedUnitCostUsd('processingPerSecondUsd'),
+        metadata: {
+          clipCount: videoUrls.length,
+          hasVoice: audioBuffers.length > 0,
+          hasCaptions: true,
+        },
+      })
+
     // Upload final video
     await updateProgress(jobId, 95, 'Uploading final video')
     const { url: finalVideoUrl } = await uploadVideo(finalVideo, `final-${projectId}.mp4`)
@@ -283,6 +372,22 @@ export async function generateVideo(
     // Extract and upload thumbnail
     const thumbnail = await extractThumbnail(finalVideo, 1)
     const { url: thumbnailUrl } = await uploadImage(thumbnail, `thumbnail-${projectId}.jpg`)
+
+      await recordGenerationCostEvent({
+        jobId,
+        projectId,
+        userId,
+        stage: 'storage_upload',
+        provider: 'cloudflare_r2',
+        operation: 'upload_final_assets',
+        usageUnit: 'mb',
+        usageQuantity: (finalVideo.length + thumbnail.length) / (1024 * 1024),
+        unitCostUsd: getEstimatedUnitCostUsd('storagePerMbUsd'),
+        metadata: {
+          finalVideoBytes: finalVideo.length,
+          thumbnailBytes: thumbnail.length,
+        },
+      })
 
     // Update project with final URLs
     await (getSupabaseAdmin() as any)

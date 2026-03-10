@@ -136,6 +136,22 @@ UPSTASH_REDIS_REST_TOKEN=AXxxxxxxxxxxxx
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 DEFAULT_USER_CREDITS=100
 NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+
+# Internal worker/cron auth
+WORKER_SECRET=replace-with-strong-random-value
+
+# Cost rollup controls
+COST_ROLLUP_CRON_ENABLED=true
+COST_ROLLUP_DAYS=30
+COST_ROLLUP_INR_TO_USD=83
+
+# Estimated unit COGS (USD) used by generation cost events
+COST_SCRIPT_PER_REQUEST_USD=0.01
+COST_IMAGE_PER_SCENE_USD=0.015
+COST_VIDEO_PER_SECOND_USD=0.02
+COST_VOICE_PER_CHARACTER_USD=0.00002
+COST_PROCESSING_PER_SECOND_USD=0.0001
+COST_STORAGE_PER_MB_USD=0.0002
 ```
 
 **Development:**
@@ -147,6 +163,11 @@ NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 **Analytics (optional):**
 - Set `NEXT_PUBLIC_GA_MEASUREMENT_ID` to enable GA4 event capture for landing instrumentation.
 - If unset, events remain available in `window.dataLayer` and the dev analytics debug panel.
+
+**Cost Analytics:**
+- `WORKER_SECRET` is required to protect internal cron endpoints.
+- Tune `COST_ROLLUP_INR_TO_USD` to match your finance conversion assumption.
+- Update `COST_*_USD` values with provider-realized costs as contracts change.
 
 ---
 

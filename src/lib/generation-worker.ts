@@ -9,6 +9,7 @@ import {
 } from './queue'
 import { generateVideo } from './video-generator'
 import { refundGenerationJobCharges } from './credits'
+import { recordGenerationCostEvent } from './cost-ledger'
 
 interface ProcessResult {
   claimed: boolean
@@ -89,6 +90,25 @@ export async function processOneGenerationJob(): Promise<ProcessResult> {
     const retryable = isRetryableError(error)
     const attempts = await getGenerationJobAttempts(jobId)
     const delaySeconds = getRetryDelaySeconds(attempts.attemptCount)
+
+      await recordGenerationCostEvent({
+        jobId,
+        projectId: claimed.projectId,
+        userId: claimed.userId,
+        stage: 'worker_failure',
+        provider: 'worker',
+        operation: retryable ? 'retryable_error' : 'non_retryable_error',
+        usageUnit: 'attempt',
+        usageQuantity: 1,
+        unitCostUsd: 0,
+        estimatedCostUsd: 0,
+        metadata: {
+          attemptCount: attempts.attemptCount,
+          maxAttempts: attempts.maxAttempts,
+          retryable,
+          errorMessage: error?.message || 'unknown_error',
+        },
+      })
 
     if (retryable && attempts.attemptCount < attempts.maxAttempts) {
       await requeueGenerationJob(

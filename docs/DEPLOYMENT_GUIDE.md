@@ -241,6 +241,33 @@ Click "Deploy" and wait for the build to complete.
 2. Update Supabase Auth redirect URLs
 3. Test the application
 
+### 6. Enable Internal Cron Jobs
+
+This repo uses Vercel Cron to run background maintenance.
+
+Configured schedules in [vercel.json](vercel.json):
+- `/api/internal/jobs/run` every minute
+- `/api/internal/payments/reconcile/run` daily at 02:00 UTC
+- `/api/internal/costs/rollup/run` daily at 02:10 UTC
+
+Set these required env vars in Vercel:
+- `WORKER_SECRET` (shared secret for internal endpoints)
+- `COST_ROLLUP_CRON_ENABLED=true`
+- `COST_ROLLUP_DAYS=30`
+- `COST_ROLLUP_INR_TO_USD=83`
+
+### 7. Validate Cost Analytics After Deploy
+
+1. Trigger rollup manually:
+   - `GET /api/internal/costs/rollup/run` with header `x-worker-secret`
+2. Verify latest row exists in `public.generation_cost_daily_rollups`.
+3. Open admin summary endpoint:
+   - `GET /api/internal/costs/dashboard-summary?limit=30`
+4. Confirm output includes:
+   - `costPerCreditUsd`
+   - `revenuePerCreditUsd`
+   - `marginPercent`
+
 ## 🧪 Testing
 
 ### Test User Registration

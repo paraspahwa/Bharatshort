@@ -12,6 +12,10 @@
     {
       "path": "/api/internal/payments/reconcile/run",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/internal/costs/rollup/run",
+      "schedule": "10 2 * * *"
     }
   ]
 }
