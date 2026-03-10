@@ -9,23 +9,19 @@ Completed locally:
 - Migration files 001-011 are present in repo, including 009/010/011.
 - TypeScript compile check passes (`npm run type-check`).
 - Internal health endpoint responds via cron-auth header.
+- Local env now includes worker/payment/reconcile keys required by health checks.
+- Health endpoint now reports `executionMode: queue` with `overallStatus: warn` only for optional alert webhook.
 
 Current blockers discovered locally:
 
-- `WORKER_SECRET` missing in active runtime env.
-- Razorpay env missing in active runtime env:
-   - `RAZORPAY_KEY_ID`
-   - `RAZORPAY_KEY_SECRET`
-   - `RAZORPAY_WEBHOOK_SECRET`
-- `GENERATION_EXECUTION_MODE` is still `inline` (should be `queue` for worker mode rollout).
-- Worker tuning envs not set in active runtime (`WORKER_MAX_*`, reconcile knobs).
-- Internal metrics/reconcile run endpoints currently return `TypeError: fetch failed` in local runtime (likely upstream/network/env dependency issue).
+- Internal metrics and reconcile runner endpoints still return `TypeError: fetch failed`.
+- Local `.env.local` is using placeholder Supabase/Redis/provider credentials, so data-backed endpoints cannot complete successfully until real staging/prod credentials are used.
 
 Immediate next actions:
 
-1. Populate missing env vars in local runtime and restart app.
+1. Replace placeholder secrets in `.env.local` with real staging credentials.
 2. Re-run health endpoint until `overallStatus` is `ok` or only expected warnings remain.
-3. Re-test:
+3. Re-test data-backed endpoints:
     - `/api/internal/jobs/metrics`
     - `/api/internal/payments/reconcile/run`
 4. Apply DB migrations in staging and run payment + reconciliation smoke tests.
@@ -196,6 +192,8 @@ If worker instability occurs:
 
 - [x] Required migration files are present in repository.
 - [x] Local compile check passes (`npm run type-check`).
+- [x] Local env keys added for worker/payment/reconciliation flow.
+- [x] Health endpoint validates queue-mode config (warn only for optional alert webhook).
 - [ ] Migrations 009/010/011 applied in staging.
 - [ ] Migrations 009/010/011 applied in production.
 - [ ] All required env vars configured.
