@@ -161,6 +161,38 @@ export default function AdminPage() {
     }
   }
 
+  const loadOptionalPanels = async () => {
+    const [metricsResult, reconcileRunsResult, costSummaryResult] = await Promise.all([
+      fetchJsonWithTimeout<WorkerDashboardMetrics>('/api/internal/jobs/dashboard-metrics', 4000),
+      fetchJsonWithTimeout<{ runs: ReconcileRun[] }>('/api/internal/payments/dashboard-reconcile', 4000),
+      fetchJsonWithTimeout<CostDashboardSummaryResponse>('/api/internal/costs/dashboard-summary?limit=14', 4000),
+    ])
+
+    if (metricsResult.ok && metricsResult.payload) {
+      setWorkerMetrics(metricsResult.payload)
+    } else {
+      setWorkerMetrics(null)
+    }
+
+    if (reconcileRunsResult.ok && reconcileRunsResult.payload) {
+      setReconcileRuns(Array.isArray(reconcileRunsResult.payload.runs) ? reconcileRunsResult.payload.runs : [])
+    } else {
+      setReconcileRuns([])
+    }
+
+    if (costSummaryResult.ok && costSummaryResult.payload) {
+      setCostSummary(costSummaryResult.payload)
+    } else {
+      setCostSummary(null)
+    }
+
+    if (!metricsResult.ok || !reconcileRunsResult.ok || !costSummaryResult.ok) {
+      setLoadError('Some admin services are temporarily unavailable. Showing partial data.')
+    } else {
+      setLoadError(null)
+    }
+  }
+
   const loadAdminData = async () => {
     try {
       setLoadError(null)
@@ -181,33 +213,7 @@ export default function AdminPage() {
       setAdminUsers(Array.isArray(adminUsersResult.payload?.admins) ? adminUsersResult.payload?.admins : [])
       setGuardReady(true)
 
-      const [metricsResult, reconcileRunsResult, costSummaryResult] = await Promise.all([
-        fetchJsonWithTimeout<WorkerDashboardMetrics>('/api/internal/jobs/dashboard-metrics', 4000),
-        fetchJsonWithTimeout<{ runs: ReconcileRun[] }>('/api/internal/payments/dashboard-reconcile', 4000),
-        fetchJsonWithTimeout<CostDashboardSummaryResponse>('/api/internal/costs/dashboard-summary?limit=14', 4000),
-      ])
-
-      if (metricsResult.ok && metricsResult.payload) {
-        setWorkerMetrics(metricsResult.payload)
-      } else {
-        setWorkerMetrics(null)
-      }
-
-      if (reconcileRunsResult.ok && reconcileRunsResult.payload) {
-        setReconcileRuns(Array.isArray(reconcileRunsResult.payload.runs) ? reconcileRunsResult.payload.runs : [])
-      } else {
-        setReconcileRuns([])
-      }
-
-      if (costSummaryResult.ok && costSummaryResult.payload) {
-        setCostSummary(costSummaryResult.payload)
-      } else {
-        setCostSummary(null)
-      }
-
-      if (!metricsResult.ok || !reconcileRunsResult.ok || !costSummaryResult.ok) {
-        setLoadError('Some admin services are temporarily unavailable. Showing partial data.')
-      }
+      await loadOptionalPanels()
 
       await fetchAdminAuditEvents(1, adminAuditActionFilter, adminAuditSearchQuery, true)
     } catch {
@@ -481,8 +487,15 @@ export default function AdminPage() {
 
       <div className="container mx-auto px-4 py-8">
         {loadError && (
-          <div className="mb-6 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            {loadError}
+          <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <span>{loadError}</span>
+            <button
+              type="button"
+              onClick={() => void loadOptionalPanels()}
+              className="rounded-lg border border-amber-200/50 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20"
+            >
+              Retry failed panels
+            </button>
           </div>
         )}
 
@@ -493,7 +506,7 @@ export default function AdminPage() {
               Worker Health
             </h2>
             <button
-              onClick={() => void loadAdminData()}
+              onClick={() => void loadOptionalPanels()}
               className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-orange-300 hover:text-orange-200"
               type="button"
             >
