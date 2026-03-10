@@ -204,6 +204,25 @@ If worker instability occurs:
 - Add Slack/Discord formatted alert adapters.
 - Add automated integration tests for payment verify + webhook idempotency.
 
+## 10. Landing Redesign Program
+
+Reference plan:
+
+- docs/LANDING_PAGE_REDESIGN_PLAN.md
+
+Execution phases:
+
+1. Phase A: Extract landing into section components.
+2. Phase B: Upgrade messaging and conversion architecture.
+3. Phase C: Visual and motion polish with mobile-first validation.
+4. Phase D: Add analytics events and iterate on CTA performance.
+
+Validation targets:
+
+- Better signup click-through from primary CTA.
+- Better scroll reach to trust and FAQ blocks.
+- No regression in mobile layout and core web vitals.
+
 ## Completion Checklist
 
 - [x] Required migration files are present in repository.
@@ -228,3 +247,7 @@ If worker instability occurs:
 - [ ] Reconciliation dry-run reviewed.
 - [ ] Repair run completed (if needed).
 - [ ] Health and metrics checks passing.
+- [x] Landing Phase A extracted to section components.
+- [x] Landing Phase B messaging and trust blocks shipped.
+- [ ] Landing Phase C visual polish validated on desktop/mobile.
+- [ ] Landing Phase D instrumentation added and tested.
