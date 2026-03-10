@@ -1,27 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { generateVideo } from '@/lib/video-generator'
 import { enqueueVideoJob } from '@/lib/queue'
 import { ensureUserExists } from '@/lib/credits'
-import { v4 as uuidv4 } from 'uuid'
+import { resolveRequestAuth } from '@/lib/request-auth'
 
 // Prevent static generation
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: async () => cookieStore })
-    
-    // Check authentication
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const auth = await resolveRequestAuth(request)
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { supabase, user } = auth
+
     // Ensure user record exists
-    await ensureUserExists(session.user.id, session.user.email)
+    await ensureUserExists(user.id, user.email)
 
     const body = await request.json()
     const { topic, language = 'en', duration = 60 } = body
@@ -36,7 +32,7 @@ export async function POST(request: NextRequest) {
       const { data: existingJob } = await (supabase as any)
         .from('generation_jobs')
         .select('id, project_id, status')
-        .eq('user_id', session.user.id)
+          .eq('user_id', user.id)
         .eq('idempotency_key', idempotencyKey)
         .maybeSingle()
 
@@ -52,10 +48,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Create project
-    const { data: project, error: projectError } = await supabase
+    const { data: project, error: projectError } = await (supabase as any)
       .from('projects')
       .insert({
-        user_id: session.user.id,
+          user_id: user.id,
         title: `Video: ${topic.substring(0, 50)}`,
         topic,
         language,
@@ -73,7 +69,7 @@ export async function POST(request: NextRequest) {
       .from('generation_jobs')
       .insert({
         project_id: project.id,
-        user_id: session.user.id,
+          user_id: user.id,
         status: 'queued',
         progress: 0,
         current_step: 'queued',
@@ -88,7 +84,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Add to Redis queue (dispatch transport)
-    const jobId = await enqueueVideoJob(project.id, session.user.id, job.id)
+    const jobId = await enqueueVideoJob(project.id, user.id, job.id)
 
     // Backward-compatible execution mode.
     // "inline" keeps current behavior until an external worker is rolled out.
@@ -98,7 +94,7 @@ export async function POST(request: NextRequest) {
         topic,
         language,
         duration,
-        userId: session.user.id,
+          userId: user.id,
         projectId: project.id,
         jobId,
       }).catch(error => {

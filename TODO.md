@@ -258,3 +258,14 @@ Validation targets:
 - [x] Landing use-case matrix section shipped.
 - [x] Landing FAQ section shipped with expand-event tracking.
 - [x] Weekly variant comparison analytics report template added.
+
+## 8. Mobile App Plan (Android + iOS)
+
+- [x] Mobile architecture plan documented.
+- [x] Phase M0: Bearer-token support added for core user/generate/jobs endpoints.
+- [x] Phase M0: API tests added for cookie + bearer auth modes.
+- [ ] Phase M1: Expo React Native app scaffold created under mobile/.
+- [ ] Phase M1: Supabase mobile auth flows implemented.
+- [ ] Phase M2: Create + job status + project list flows implemented.
+- [ ] Phase M3: Play Billing + StoreKit purchase verification architecture implemented.
+- [ ] Phase M4: Push notifications and staged rollout runbook completed.

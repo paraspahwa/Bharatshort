@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { getJobStatus } from '@/lib/queue'
+import { resolveRequestAuth } from '@/lib/request-auth'
 
 // Prevent static generation
 export const dynamic = 'force-dynamic'
@@ -12,14 +11,12 @@ export async function GET(
 ) {
   try {
     const { jobId } = await params
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: async () => cookieStore })
-    
-    // Check authentication
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+      const auth = await resolveRequestAuth(request)
+      if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+      const { supabase, user } = auth
 
     // SQL is the source of truth for durable job status.
     const { data: sqlJob } = await (supabase as any)
@@ -29,7 +26,7 @@ export async function GET(
       .maybeSingle()
 
     if (sqlJob) {
-      if (sqlJob.user_id !== session.user.id) {
+        if (sqlJob.user_id !== user.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
       }
 
@@ -53,7 +50,7 @@ export async function GET(
     }
 
     // Verify job belongs to user
-    if (job.userId !== session.user.id) {
+      if (job.userId !== user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 

@@ -4,7 +4,10 @@
 `https://your-domain.vercel.app/api`
 
 ## Authentication
-All endpoints require authentication via Supabase session cookie.
+All protected endpoints require authentication via one of:
+
+- Supabase session cookie (web)
+- Authorization header with Bearer JWT (mobile)
 
 ## Endpoints
 

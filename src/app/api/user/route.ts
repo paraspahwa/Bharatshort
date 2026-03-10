@@ -1,45 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { getCreditUsageSummary, ensureUserExists } from '@/lib/credits'
+import { resolveRequestAuth } from '@/lib/request-auth'
 
 // Prevent static generation
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: async () => cookieStore })
-    
-    // Check authentication
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const auth = await resolveRequestAuth(request)
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { supabase, user } = auth
+
     // Ensure user record exists
-    await ensureUserExists(session.user.id, session.user.email)
+    await ensureUserExists(user.id, user.email)
 
     // Get user data
-    const { data: user } = await supabase
+    const { data: dbUser } = await supabase
       .from('users')
       .select('*')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .maybeSingle()
 
     // Get credit summary
-    const creditSummary = await getCreditUsageSummary(session.user.id)
+    const creditSummary = await getCreditUsageSummary(user.id)
 
     // Get recent projects
     const { data: projects } = await supabase
       .from('projects')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(5)
 
     return NextResponse.json({
-      user,
+      user: dbUser,
       creditSummary,
       recentProjects: projects || [],
     })
